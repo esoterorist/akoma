@@ -86,6 +86,12 @@
     // a machine with an input: listen('all' | a machine id | '') returns the node to plug into it; sources() lists who is on the canvas
     listen: function (src) { return H.listen ? H.listen(me, src) : null; },
     sources: function () { return H.sources ? H.sources(me) : []; },
+    // a machine with an audio In (a plug port on its node): plugged() names the machines wired into it; lineUp() is how many
+    // frames the rack holds the other machines back, so its own voice starts that much later and lands with them
+    plugged: function () { return H.plugged ? H.plugged(me) : []; },
+    lineUp: function () { return H.lineUp ? H.lineUp() : 0; },
+    // an audio track's panel: the rack owns the input, the tape and the recorder (see "audio tracks" in the rack page)
+    audio: function () { return H.audio ? H.audio(me) : null; },
     // Lean: lean() is the rack's switch; onLean(fn) is called now and on every change with true / false
     lean: function () { return !!(H.lean && H.lean()); },
     onLean: function (fn) { if (H.onLean) H.onLean(me, fn); },

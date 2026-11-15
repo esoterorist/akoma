@@ -109,8 +109,8 @@ input[type=number]{border:1px solid var(--ink);background:transparent;min-height
 .strip.lane{box-shadow:inset 0 -4px 0 var(--live)}
 
 /* the whole beat */
-.gridw{display:grid;grid-template-columns:34px minmax(0,1fr);gap:0 6px}
-.gl{display:grid;grid-template-rows:repeat(16,1fr)}
+.gridw{display:grid;grid-template-columns:34px minmax(0,1fr);gap:0 6px;align-items:start;align-content:start}
+.gl{display:grid;grid-template-rows:repeat(16,minmax(0,1fr));height:352px}
 .gl button{appearance:none;border:0;background:transparent;font:600 9px/1 var(--mono);letter-spacing:.04em;text-align:left;padding:0 0 0 4px;cursor:pointer;color:var(--mute);border-left:3px solid transparent;min-height:0}
 .gl button.sel{color:var(--ink);border-left-color:var(--sig);font-weight:700}
 .gl button.m{text-decoration:line-through;opacity:.5}
@@ -438,7 +438,7 @@ class Engine{
       case'rec':this.recOn=!!m.on;this.quant=m.q!==false;break;
       case'bpm':S.bpm=m.v;if(!q.playing)q.stepLen=this.sr*60/S.bpm/4;break;
       case'sl':{const s=this.sl[m.i];s.tg=clamp(+m.v||0,0,1);s.held=!!m.held;
-        if(m.held&&this.recOn&&q.playing){const p=S.pats[q.cur],i=((q.cnt-1)%p.len+p.len)%p.len;p.ln[m.i][i]=s.tg;if(this.lastLn[m.i]!==i){this.lastLn[m.i]=i}this.emit({t:'lw',pat:q.cur,k:m.i,i,v:s.tg})}break}
+        if(m.held&&this.recOn&&q.playing){const p=S.pats[q.cur],n=Math.round(this.posOf(this.frame)),i=((q.cnt+n-q.tot)%p.len+p.len)%p.len;p.ln[m.i][i]=s.tg;this.emit({t:'lw',pat:q.cur,k:m.i,i,v:s.tg})}break}
       case'lnclr':S.pats[m.pat].ln[m.k].fill(null);break;
       case'hit':this.live(m.tr|0,clamp(+m.vel||.8,.05,1),m.p|0,!!m.rec);break;
       case'roll':if(m.on){const r={tr:m.tr|0,vel:clamp(+m.vel||.8,.05,1),p:m.p|0,rate:+m.rate||1,next:-1,rec:!!m.rec};this.rolls.set(m.id,r)}else this.rolls.delete(m.id);break;
@@ -456,7 +456,7 @@ class Engine{
       case'play':this.play(m.pat);q.stopF=null;if(m.at!=null){if(this.cf!=null)this.startAt(m);else this.pend=m}break;
       case'stop':if(m.at!=null&&this.cf!=null&&q.playing)q.stopF=m.at*this.sr-this.cf;else this.stop();break;
       case'rk':if(this.cf==null)break;if(m.off){q.rk=null;q.rkS=0}else{q.rkS=m.spf;q.rk=(m.q||[]).map(x=>({f:x.f-this.cf,spf:x.spf}))}break;
-      case'cur':if(!q.playing){q.cur=clamp(m.i|0,0,NPAT-1);q.queued=-1}else q.queued=(m.i===q.cur?-1:m.i|0);break;
+      case'cur':if(!q.playing){q.cur=clamp(m.i|0,0,NPAT-1);q.queued=-1}else q.queued=(m.i===q.cur?-1:clamp(m.i|0,0,NPAT-1));break;
       case'cue':if(q.playing&&m.at!=null&&this.cf!=null){q.cueF=m.at*this.sr-this.cf;q.cueP=m.i|0}else{q.cur=clamp(m.i|0,0,NPAT-1);q.queued=-1;this.emit({t:'patsw',i:q.cur})}break;
       case'panic':this.evq.length=0;this.rolls.clear();this.echo.clr();this.verb.clr();break;
     }}
@@ -473,16 +473,15 @@ class Engine{
     this.emit({t:'pos',pl:0,s:-1,pat:q.cur})}
   push(e){const Q=this.evq;let i=Q.length;while(i>0&&Q[i-1].f>e.f)i--;Q.splice(i,0,e)}
   genStep(){const q=this.q,S=this.S,G=this.G;
-    if(q.cueF!=null&&q.nextTick>=q.cueF-2){q.cur=clamp(q.cueP,0,NPAT-1);q.cueF=null;q.queued=-1;q.cnt=0;this.emit({t:'patsw',i:q.cur})}
-    else if(q.queued>=0&&q.tot%16===0){q.cur=q.queued;q.queued=-1;q.cnt=0;this.emit({t:'patsw',i:q.cur})}
+    if(q.cueF!=null&&q.nextTick>=q.cueF-2){q.cur=clamp(q.cueP,0,NPAT-1);q.cueF=null;q.queued=-1;q.cnt=0;this.push({f:q.nextTick,k:'sw',i:q.cur,x:1})}
+    else if(q.queued>=0&&q.tot%16===0){q.cur=clamp(q.queued,0,NPAT-1);q.queued=-1;q.cnt=0;this.push({f:q.nextTick,k:'sw',i:q.cur,x:1})}
     while(q.rk&&q.rk.length&&q.nextTick>=q.rk[0].f-1)q.rkS=q.rk.shift().spf;
     const stepLen=q.rkS||this.sr*60/S.bpm/4;q.stepLen=stepLen;const tick=q.nextTick,p=S.pats[q.cur],len=p.len,i=q.cnt%len;
     const sw=(i&1)?clamp((G.sw-50)/50,0,.5)*stepLen:0,nrm=1-.45*G.acc;
     for(let t=0;t<NV;t++){const tr=p.tr[t],v=tr.v[i];if(!v||this.mute[t])continue;
-      if(q.skip[t]===q.tot){q.skip[t]=-1;continue}
       const x=tr.x[i];if(x&&x.c!=null&&x.c<100&&rnd01()*100>=x.c)continue;
       const vel=v>=3?1:v===2?nrm:nrm*.4,r=x&&x.r>1?Math.min(4,x.r|0):1,f0=tick+sw+(x&&x.t?clamp(x.t,-45,45)/100*stepLen:0);
-      for(let k=0;k<r;k++)this.push({f:Math.max(this.frame,f0+k*stepLen/r),k:'h',tr:t,vel:k?vel*(.62+.1*k):vel,p:x&&x.p?x.p:0,sl:!!(x&&x.s)&&k===0})}
+      for(let k=0;k<r;k++)this.push({f:Math.max(this.frame,f0+k*stepLen/r),k:'h',tr:t,vel:k?vel*(.62+.1*k):vel,p:x&&x.p?x.p:0,sl:!!(x&&x.s)&&k===0,st:q.tot})}
     for(let k=0;k<2;k++){const sl=this.sl[k];if(sl.held&&this.recOn){p.ln[k][i]=sl.tg;this.emit({t:'lw',pat:q.cur,k,i,v:sl.tg});continue}const lv=p.ln[k][i];if(lv!=null&&!sl.held)this.push({f:tick,k:'ln',i:k,v:lv})}
     this.push({f:tick,k:'pos',s:i,pat:q.cur});
     q.cnt++;q.tot++;q.nextTick=tick+stepLen}
@@ -490,28 +489,26 @@ class Engine{
   /* a pad played by hand: sounds now, and if recording lands on the grid without doubling */
   live(tr,vel,p,rec){this.push({k:'h',tr,vel,p,sl:false,f:this.frame,x:1});this.act=true;
     const q=this.q;if(!(rec&&this.recOn&&q.playing))return;
-    const pos=this.posOf(this.frame),n=this.quant?Math.round(pos):Math.floor(pos+.45),pt=this.S.pats[q.cur],len=pt.len,i=((q.cnt+n-q.tot)%len+len)%len;
+    const pos=this.posOf(this.frame),n=Math.round(pos-1e-6),pt=this.S.pats[q.cur],len=pt.len,i=((q.cnt+n-q.tot)%len+len)%len;
     const v=vel>.86?3:vel<.42?1:2,x={};if(p)x.p=p;if(!this.quant){const sh=Math.round(clamp((pos-n)*100,-45,45));if(sh)x.t=sh}
     const tk=pt.tr[tr];tk.v[i]=v;const has=Object.keys(x).length>0;if(has)tk.x[i]=x;else delete tk.x[i];
-    if(n>=q.tot)q.skip[tr]=n;
+    q.skip[tr]=n;                                                  // the step it lands on stays quiet this time round: no flam
     this.emit({t:'wr',pat:q.cur,tr,i,v,x:has?x:null})}
   doRolls(end){if(!this.rolls.size)return;const q=this.q;
     for(const r of this.rolls.values()){const span=r.rate*q.stepLen;
       if(r.next<0){if(q.playing){const pos=this.posOf(this.frame);r.next=q.nextTick+(Math.ceil(pos/r.rate-1e-6)*r.rate-q.tot)*q.stepLen}else r.next=this.frame}
-      let guard=0;while(r.next<end&&guard++<16){const f=Math.max(this.frame,r.next);let play=true;
+      let guard=0;while(r.next<end&&guard++<16){const f=Math.max(this.frame,r.next);const play=true;
         if(r.rec&&this.recOn&&q.playing){const pos=this.posOf(f),pt=this.S.pats[q.cur],len=pt.len,tk=pt.tr[r.tr],ix=s=>((q.cnt+s-q.tot)%len+len)%len;
           const v=r.vel>.86?3:r.vel<.42?1:2,on=Math.abs(pos-Math.round(pos))<.02;
           const wr=(i,x)=>{const has=Object.keys(x).length>0;if(tk.v[i]===v&&JSON.stringify(tk.x[i]||null)===JSON.stringify(has?x:null))return;tk.v[i]=v;if(has)tk.x[i]=x;else delete tk.x[i];this.emit({t:'wr',pat:q.cur,tr:r.tr,i,v,x:has?x:null})};
-          if(r.rate<1){const i=ix(Math.floor(pos+.02)),ex=tk.x[i];
-            if(tk.v[i]>0&&ex&&ex.r>1)play=false;                         // the step already ratchets: the pattern plays it
-            else if(on){const x={r:Math.min(4,Math.round(1/r.rate))};if(r.p)x.p=r.p;wr(ix(Math.round(pos)),x)}}
+          if(r.rate<1){if(on){const sN=Math.round(pos),x={r:Math.min(4,Math.round(1/r.rate))};if(r.p)x.p=r.p;q.skip[r.tr]=sN;wr(ix(sN),x)}}
           else{const sN=Math.round(pos),i=ix(sN),x={};if(r.p)x.p=r.p;const sh=Math.round((pos-sN)*100);if(Math.abs(sh)>2)x.t=clamp(sh,-45,45);
-            if(tk.v[i]>0&&sN<q.tot)play=false;else if(sN>=q.tot)q.skip[r.tr]=sN;
-            wr(i,x)}}
+            q.skip[r.tr]=sN;wr(i,x)}}
         if(play)this.push({f,k:'h',tr:r.tr,vel:r.vel,p:r.p,sl:false,x:1});
         r.next+=span}}}
   fire(e){
     if(e.k==='h'){const t=e.tr,P=this.P[t];let p=e.p|0;
+      if(e.st!=null&&this.q.skip[t]===e.st)return;                 // a pad or a roll just played this step by hand
       if(P.kf){let tab=this.km;for(const k of this.kmQ)if(e.f>=k.f-.5)tab=k.tab;if(tab){const n=clamp(48+(this.G.root|0)+p,0,127),m=tab[n];if(m!=null)p+=m-n}}
       const V=this.V[t];
       V.trig(e.vel,p,e.sl);V.coef(this.EP[t]);if(t===15)this.V[14].choke();
@@ -521,6 +518,7 @@ class Engine{
             this.emit({t:'nout',k:'on',n,v:Math.round(e.vel*127),f:F});this.bass={n,f:e.f+this.sr*clamp(.11*Math.pow(2,this.EP[0].dec*5.75)*.5,.08,2)}}}
         else{this.emit({t:'nout',k:'on',n:GM[t],v:Math.round(e.vel*127),f:F});this.emit({t:'nout',k:'off',n:GM[t],v:0,f:F+this.sr*.06})}}}
     else if(e.k==='ln'){this.sl[e.i].tg=e.v}
+    else if(e.k==='sw'){this.emit({t:'patsw',i:e.i})}
     else if(e.k==='pos'){this.emit({t:'pos',pl:1,s:e.s,pat:e.pat})}}
   /* ribbons → what they move, once a block */
   mods(){const G=this.G,M=this.M;M.filter=0;M.kitTune=0;M.kitDec=0;M.hatDec=0;M.bdDec=0;M.bdTune=0;M.snap=0;M.heat=0;M.dly=0;M.dfb=0;M.rev=0;M.crush=0;
@@ -707,8 +705,8 @@ const flash=new Array(NV).fill(0);
 const vis=()=>!(RACKED&&RACK.visible&&!RACK.visible());
 function onEng(m){switch(m.t){
   case'nout':if(RACKED&&RACK.notes&&A.ctx)RACK.notes({k:m.k,n:m.n,v:m.v,t:m.f/A.ctx.sampleRate});break;
-  case'pos':if(!m.pl){U.playing=false;U.pos=-1;renderTransport();markNow()}else{U.pos=m.s;U.ppat=m.pat;if(!vis())break;if(U.follow&&m.pat===S.cur){const pg=m.s>>4;if(pg!==U.page){U.page=pg;renderPages();renderPads();drawGrid()}}markNow()}break;
-  case'patsw':U.queued=-1;if(m.i!==S.cur){S.cur=m.i;U.es=-1;U.page=0;renderBeat()}else renderPads();break;
+  case'pos':if(!m.pl){U.playing=false;U.pos=-1;if(U.queued>=0){U.queued=-1;renderPads()}renderTransport();markNow()}else{U.pos=m.s;U.ppat=m.pat;if(!vis())break;if(U.follow&&m.pat===S.cur){const pg=m.s>>4;if(pg!==U.page){U.page=pg;renderPages();renderPads();drawGrid()}}markNow()}break;
+  case'patsw':U.queued=-1;if(m.i!==S.cur){S.cur=m.i;U.es=-1;U.page=0;renderBeat();saveSoon()}else renderPads();break;
   case'wr':{const tr=S.pats[m.pat].tr[m.tr];tr.v[m.i]=m.v;if(m.x)tr.x[m.i]=m.x;else delete tr.x[m.i];saveSoon();if(m.pat===S.cur){drawGrid();if(S.mode==='steps')renderPads()}break}
   case'lw':S.pats[m.pat].ln[m.k][m.i]=m.v;saveSoon();renderRibs();break;
   case'vu':{U.sv=m.s;if(!vis())break;if(m.m){const now=performance.now();for(let t=0;t<NV;t++)if(m.m&(1<<t))flash[t]=now+90;markHits()}
@@ -733,13 +731,13 @@ function holdBtn(b,on,off){let id=null,t0=0,latched=false;
   return{release(){latched=false;id=null;off();b.setAttribute('aria-pressed','false')}}}
 
 /* ---------- undo ---------- */
-function snap(){U.undo.push({i:S.cur,p:JSON.stringify(pat())});if(U.undo.length>40)U.undo.shift()}
+function snap(key){const now=performance.now();if(key&&U.snapK===key&&now-U.snapAt<900){U.snapAt=now;return}U.snapK=key||'';U.snapAt=now;U.undo.push({i:S.cur,p:JSON.stringify(pat())});if(U.undo.length>40)U.undo.shift()}
 function undo(){const u=U.undo.pop();if(!u){status('Nothing to undo.');return}S.pats[u.i]=fixPat(JSON.parse(u.p));sendPat(u.i);if(u.i===S.cur)renderBeat();status('Undone.')}
 
 /* ---------- steps ---------- */
 function setStep(tr,i,v,x,quiet){const t=pat().tr[tr];t.v[i]=v;if(x&&Object.keys(x).length)t.x[i]=x;else delete t.x[i];if(!v)delete t.x[i];
   send({t:'st',pat:S.cur,tr,i,v,x:t.x[i]||null});saveSoon();if(!quiet){drawGrid();if(S.mode==='steps')renderPads()}}
-function tapStep(tr,i){snap();const t=pat().tr[tr],cur=t.v[i];setStep(tr,i,cur===S.paint?0:S.paint,cur?t.x[i]:null);if(!cur&&!U.playing)audition(tr,S.paint===3?1:S.paint===1?.4:.75,0)}
+function tapStep(tr,i){snap();const t=pat().tr[tr],cur=t.v[i];setStep(tr,i,cur?0:S.paint,null);if(!cur&&!U.playing)audition(tr,S.paint===3?1:S.paint===1?.4:.75,0)}
 function audition(tr,vel,p,rec){ensureAudio().then(ok=>{if(ok)send({t:'hit',tr,vel,p:p|0,rec:!!rec})})}
 
 /* ---------- pads ---------- */
@@ -793,7 +791,7 @@ function goBeat(i){if(i===S.cur&&U.queued<0)return;if(U.playing){if(RACKED&&RACK
 function openEdit(st){if(st>=pat().len)return;U.es=st;const t=pat().tr[S.sel];if(!t.v[st]){snap();setStep(S.sel,st,S.paint,null)}$('#edit').hidden=false;renderEdit();renderPads()}
 function closeEdit(){U.es=-1;$('#edit').hidden=true}
 function edX(){const t=pat().tr[S.sel];return Object.assign({},t.x[U.es])}
-function edSet(k,v,def){if(U.es<0)return;snap();const t=pat().tr[S.sel],x=edX();if(v===def||v==null)delete x[k];else x[k]=v;setStep(S.sel,U.es,t.v[U.es]||2,x);renderEdit()}
+function edSet(k,v,def){if(U.es<0)return;snap(k==='t'||k==='c'||k==='p'?k+S.cur+'.'+S.sel+'.'+U.es:null);const t=pat().tr[S.sel],x=edX();if(v===def||v==null)delete x[k];else x[k]=v;setStep(S.sel,U.es,t.v[U.es]||2,x);renderEdit()}
 function renderEdit(){if(U.es<0)return;const t=pat().tr[S.sel],v=t.v[U.es],x=t.x[U.es]||{};
   $('#edT').textContent=VN[S.sel]+' · step '+(U.es+1);
   segBtns($('#edV'),[[0,'Off'],[1,'Soft'],[2,'Hit'],[3,'Accent']],()=>pat().tr[S.sel].v[U.es],nv=>{snap();setStep(S.sel,U.es,nv,nv?edX():null);if(!nv)closeEdit();renderPads()});
@@ -892,7 +890,7 @@ function togglePlay(){if(RACKED&&RACK.linked()){ensureAudio();RACK.toggle();retu
   ensureAudio().then(ok=>{if(!ok)return;if(U.playing){send({t:'stop'});U.playing=false;U.queued=-1}else{send({t:'play',pat:S.cur});U.playing=true}renderTransport();renderPads()})}
 function setBpm(v,quiet){S.bpm=clamp(Math.round(v*2)/2,40,240);if(!quiet)$('#bpm').value=S.bpm;send({t:'bpm',v:S.bpm});saveSoon()}
 function renderPages(){const n=pat().len/16;if(U.page>=n)U.page=n-1;
-  segBtns($('#bars'),[[1,'1'],[2,'2'],[3,'3'],[4,'4']],()=>pat().len/16,v=>{snap();const p=pat(),old=p.len;p.len=v*16;
+  segBtns($('#bars'),[[1,'1'],[2,'2'],[3,'3'],[4,'4']],()=>pat().len/16,v=>{snap();const p=pat(),old=p.len;p.len=v*16;if(U.es>=p.len)closeEdit();
     if(p.len>old&&!p.tr.some(t=>t.v.slice(old,p.len).some(Boolean))){for(const t of p.tr)for(let i=old;i<p.len;i++){t.v[i]=t.v[i%old];if(t.x[i%old])t.x[i]=Object.assign({},t.x[i%old])}for(const l of p.ln)for(let i=old;i<p.len;i++)l[i]=l[i%old]}
     sendPat();renderPages();renderPads();drawGrid()});
   segBtns($('#pages'),Array.from({length:n},(_,i)=>[i,String(i+1)]),()=>U.page,v=>{U.page=v;U.follow=false;$('#bFollow').setAttribute('aria-pressed','false');renderPads();drawGrid()})}

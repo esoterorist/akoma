@@ -147,6 +147,7 @@ button.chip:hover{background:var(--faint2)}
 .port.ok{background:var(--sig);box-shadow:0 0 0 4px var(--sig)}
 .world.wiring .port:not(.ok):not(.src){opacity:.3}
 /* the Duck node's Key input: a blue diamond on the left edge, level with the Key row */
+.port.plug{top:36px}
 .port.key{top:58px;border-color:var(--live);transform:rotate(45deg)}
 .port.key.on{background:var(--live)}
 /* a shared effect's In: sends arrive here (dot in the middle) */
@@ -373,6 +374,10 @@ input[type=range]::-moz-range-thumb{width:10px;height:20px;background:var(--ink)
 .armb[aria-pressed="true"]::before{background:var(--warn)}
 .tl .rh.tph{height:38px;border-bottom-color:var(--faint2)}
 .tp{position:relative;height:38px;border-bottom:1px solid var(--faint2);background:var(--faint);min-width:0}
+.tl .rh.audh{height:46px}
+.tp.own{height:46px}
+.tp.own .hint{line-height:46px}
+.tp.drop{outline:2px solid var(--sig);outline-offset:-2px}
 .tp .sb{position:absolute;top:0;bottom:0;width:1px;background:var(--faint2);pointer-events:none}
 .tp .hint{position:sticky;left:calc(var(--namew,150px) + 10px);display:inline-block;font:500 9px/38px var(--mono);letter-spacing:.04em;color:var(--mute);white-space:nowrap;pointer-events:none}
 .clip{position:absolute;top:4px;bottom:4px;appearance:none;border:1px solid var(--ink);background:var(--ink);padding:0;cursor:pointer;overflow:hidden;min-width:4px;touch-action:manipulation}
@@ -665,7 +670,16 @@ const DEVS = [
   { id: 'funtunfunefu', name: 'Funtunfunefu', code: 'FTF—16', kind: 'sampler + sequencer', src: 'dev/funtunfunefu.html', irv: true, ide: true, nap: true, nout: true, nin: true },
   { id: 'fawohodie', name: 'Fawohodie', code: 'FWH—60', kind: 'Juno-type poly', src: 'dev/fawohodie.html', irv: true, ide: true, nout: true, nin: true },
   { id: 'asaseyeduru', name: 'Asase Ye Duru', code: 'AYD—08', kind: '808 drum machine', src: 'dev/asaseyeduru.html', irv: true, ide: true, nout: true, nin: true },
+  // ain: the machine has an audio In. Another machine's output dragged onto it (a plug wire) plays through it instead of going its own way
+  { id: 'sesawosuban', name: 'Sesa Wo Suban', code: 'SWS—XY', kind: 'XY effects + chaos voice', src: 'dev/sesawosuban.html', nin: true, ain: true, mono: true },
+  // aud: an audio track. No sequencer and no Clock wire: a live input (mic, line, hardware) and audio files go onto its tape in
+  // Song view as clips. Its page (dev/audio.html) is only a panel; the rack owns the input (see "audio tracks" below).
+  { id: 'audio1', name: 'Audio 1', code: 'IN—1', kind: 'audio track', src: 'dev/audio.html#1', aud: true },
+  { id: 'audio2', name: 'Audio 2', code: 'IN—2', kind: 'audio track', src: 'dev/audio.html#2', aud: true },
+  { id: 'audio3', name: 'Audio 3', code: 'IN—3', kind: 'audio track', src: 'dev/audio.html#3', aud: true },
+  { id: 'audio4', name: 'Audio 4', code: 'IN—4', kind: 'audio track', src: 'dev/audio.html#4', aud: true },
 ];
+const isAud = id => /^audio[1-4]$/.test(id);
 // what a machine does with the notes it takes in (shown on its notes-in port)
 const NIH = {
   dwennimmen: 'GM drum notes hit its voices (36 kick, 38 snare, 42 / 46 hats …)',
@@ -674,6 +688,7 @@ const NIH = {
   funtunfunefu: '36–51 hit pads 1–16; other notes play the selected pad, pitched (60 = as sampled)',
   mframadan: 'notes open the selected cloud at their pitch (60 = as written)',
   '101': 'played like its keys: plays, feeds the arp, or transposes a running sequence',
+  sesawosuban: 'notes play its voice (both pulses and the noise pitch), one at a time',
 };
 const MAX_BUS = 4, MAX_DUCK = 4, MAX_EQ = 4, MAX_SAT = 4, MAX_MOD = 8, MAX_NT = 8;
 const NODE_W = { clock: 212, machine: 236, bus: 200, out: 236, rec: 264, duck: 236, fx: 236, mst: 280, eq: 280, sat: 280, mod: 248, nt: 224 };
@@ -682,6 +697,7 @@ const MST_LAT = 31;   // frames the Master chain holds the mix back (its 2× ove
 const FXS = ['verb', 'dub'], FXN = { verb: 'Reverb', dub: 'Dub Delay' };
 const PORT_Y = 21;   // every port sits on the header's centre line, so wires never need a layout read
 const KEY_Y = 64;
+const PLUG_Y = 42;   // a machine's audio In (Sesa Wo Suban) sits between its clock in and its notes in
 const NOTE_Y = 64;   // a machine's note in / out sit level with its first body row, below its clock in and audio out    // except a Duck's Key input, pinned level with its first body row
 // machines most likely to carry a kick, in the order a new Duck looks for its key
 const DRUMS = ['dwennimmen', 'asaseyeduru', 'hextrig', 'hyewonhye', 'nkonsonkonson', 'funtunfunefu'];
@@ -738,15 +754,21 @@ function noteLoops(a, b) {
 }
 function loops(a, b) { let n = b, g = 0; while (n && g++ < 32) { if (n === a) return true; const w = audioWire(n); n = w ? w.b : ''; } return false; }
 const isIns = t => t === 'eq' || t === 'sat';   // inserts: EQ and Saturator
+/* Plug wires (k: 'plug'): a machine's audio out → the In of a machine that has one (ain). The plugged machine's sound, after
+   its own fader, mute, Duck, EQ and Saturator, goes into that machine and nowhere else; it is heard, recorded and stemmed
+   as part of the machine it is plugged into. */
+const isThru = id => { const d = DEVS.find(x => x.id === id); return !!(d && d.ain); };
+const plugOf = id => st.wires.find(w => w.a === id && w.k === 'plug');
 function canWire(a, b, k) {
   const ta = typeOf(a), tb = typeOf(b);
   if (!ta || !tb || a === b) return false;
   if (k === 'key') return ta === 'machine' && tb === 'duck';
+  if (k === 'plug') return ta === 'machine' && isThru(b) && !isThru(a);
   if (k === 'mod') return ta === 'mod' && modKeysOf(b).length > 0;
   if (k === 'note') return nOut(a) && nIn(b) && !noteLoops(a, b);
   if (ta === 'mod' || tb === 'mod' || ta === 'nt' || tb === 'nt') return false;
   if (k === 'snd') return (ta === 'machine' && tb === 'fx') || (a === 'dub' && b === 'verb');
-  if (ta === 'clock') return tb === 'machine';
+  if (ta === 'clock') return tb === 'machine' && !isAud(b);
   if (ta === 'machine') return tb === 'bus' || tb === 'out' || tb === 'duck' || isIns(tb);
   if (ta === 'fx') return tb === 'bus' || tb === 'out' || tb === 'duck' || isIns(tb);
   if (ta === 'duck') return tb === 'bus' || tb === 'out' || isIns(tb);
@@ -757,7 +779,7 @@ function canWire(a, b, k) {
   return false;
 }
 const isKey = w => w.k === 'key';
-const audioWire = id => st.wires.find(w => w.a === id && !w.k);   // where a node's sound goes (key wires are taps)
+const audioWire = id => st.wires.find(w => w.a === id && (!w.k || w.k === 'plug'));   // where a node's sound goes (key wires are taps)
 
 /* ---------- saved patch + settings (this browser only) ---------- */
 const LS = 'ant07.v1', OLD = 'ant06.v1';
@@ -774,7 +796,7 @@ if (!st.nodes || typeof st.nodes !== 'object') { st.nodes = JSON.parse(JSON.stri
 for (const k in st.nodes) if (!typeOf(k) || !st.nodes[k] || !isFinite(st.nodes[k].x) || !isFinite(st.nodes[k].y)) delete st.nodes[k];
 for (const k of ['clock', 'out', 'rec']) if (!st.nodes[k]) st.nodes[k] = Object.assign({}, DEF_NODES[k]);
 if (!Array.isArray(st.wires)) st.wires = [];
-{ const seen = new Set(); st.wires = st.wires.filter(w => { if (!w || !st.nodes[w.a] || !st.nodes[w.b] || !canWire(w.a, w.b, w.k)) return false; if (w.k === 'mod') { if (typeof w.p !== 'string' || !modKeysOf(w.b).includes(w.p)) return false; w.d = clamp(+w.d || 0, -1, 1); } else if (w.k !== 'key' && w.k !== 'note') delete w.k; const k = w.a + '>' + w.b + (w.k ? '#' + w.k + (w.p || '') : ''); if (seen.has(k)) return false; seen.add(k); return true; }); }
+{ const seen = new Set(); st.wires = st.wires.filter(w => { if (!w || !st.nodes[w.a] || !st.nodes[w.b] || !canWire(w.a, w.b, w.k)) return false; if (w.k === 'mod') { if (typeof w.p !== 'string' || !modKeysOf(w.b).includes(w.p)) return false; w.d = clamp(+w.d || 0, -1, 1); } else if (w.k !== 'key' && w.k !== 'note' && w.k !== 'plug') delete w.k; const k = w.a + '>' + w.b + (w.k ? '#' + w.k + (w.p || '') : ''); if (seen.has(k)) return false; seen.add(k); return true; }); }
 if (!st.duck || typeof st.duck !== 'object') st.duck = {};
 const duckDefaults = () => ({ mode: 'key', lows: true, rate: 4, depth: 0.7, rel: 0.51, on: true });
 for (const k in st.nodes) if (typeOf(k) === 'duck') st.duck[k] = Object.assign(duckDefaults(), st.duck[k] || {});
@@ -860,6 +882,19 @@ for (const k of FXS) { st.fx[k] = Object.assign(fxDefaults[k](), st.fx[k] || {})
 // rv / dl: this machine's send levels (after its fader); rvOwn: keep its own reverb even when the rack has a Reverb
 // kf: the machine follows the rack key (and section keys)
 DEVS.forEach(d => { st.ch[d.id] = Object.assign({ vol: 0.45, pan: 0, mute: false, solo: false, arm: true, rv: 0, dl: 0, rvOwn: false, kf: true }, st.ch[d.id] || {}); });
+/* Audio tracks: what each one listens to. dev = the input device (''= the system's), mode = st | l | r (which side of the input),
+   gain in dB, mon = hear the input through the track, rt = the measured round trip in ms (null = the browser's own figures),
+   trim = ms added to that by hand, on = the input was open last time. st.cin = count-in bars before a recording from Stop. */
+{
+  const a = st.ain && typeof st.ain === 'object' ? st.ain : {}; st.ain = {};
+  for (const d of DEVS) if (d.aud) {
+    const c = a[d.id] && typeof a[d.id] === 'object' ? a[d.id] : {};
+    st.ain[d.id] = { dev: typeof c.dev === 'string' ? c.dev : '', mode: ['st', 'l', 'r'].includes(c.mode) ? c.mode : 'st', gain: clamp(+c.gain || 0, -24, 24), mon: !!c.mon,
+      rt: c.rt != null && isFinite(+c.rt) ? clamp(+c.rt, 0, 1000) : null, trim: clamp(Math.round(+c.trim || 0), -100, 100), on: !!c.on, fit: [0, -1, 1, 2, 4, 8, 16].includes(c.fit) ? c.fit : 0 };
+    st.ch[d.id].sync = false;
+  }
+  st.cin = [0, 1, 2].includes(st.cin) ? st.cin : 1;
+}
 /* ---------- the Arranger's song ----------
    v2: scenes = which pattern each machine plays (pat[machine] = pattern index, -2 = on as set on the machine, missing = off);
    sections = the song in order, each playing one scene for some bars, with an optional follow action fo = { to, ch }
@@ -1011,7 +1046,7 @@ const FX = {};  // shared send effects: verb, dub
 const EQ = {};  // EQ nodes: the junction each one is, plus every channel copy of its filters
 const SAT = {}; // Saturator nodes: the junction, plus every channel copy (one worklet each)
 const DL = DEVS.map(x => D[x.id]);   // fixed order, built once: hot loops never allocate it again
-Object.defineProperty(H, '_dbg', { value: () => ({ D, M, B, DK, FX, EQ, SAT, satMsg: id => satMsg(id), insertSat: id => insertIns(id, 'sat'), satMatch, syncEqs: () => syncEqs(), insertEq: id => insertEq(id), eqPath: id => eqPath(id), eqResp: (id, i, sr) => bandResp(st.eq[id], i, sr, new Float64Array(EQN)), fOf, eqChanged: (id, slow) => eqChanged(id, slow), canWire, EQN: () => EQN, rec, st, quickDuck, play, stop, setTempo, launch, setSync, addNode, removeNode, connect, openMachine, VIEW, sendFx, applyMix, removeWire: w => removeWire(w), sendWires: () => SW, LU, Gate, kw, luMeter, matchTarget, sendMst, setInsert: v => setInsert(v), recButton }) });
+Object.defineProperty(H, '_dbg', { value: () => ({ D, M, B, DK, FX, EQ, SAT, satMsg: id => satMsg(id), insertSat: id => insertIns(id, 'sat'), satMatch, syncEqs: () => syncEqs(), insertEq: id => insertEq(id), eqPath: id => eqPath(id), eqResp: (id, i, sr) => bandResp(st.eq[id], i, sr, new Float64Array(EQN)), fOf, eqChanged: (id, slow) => eqChanged(id, slow), canWire, EQN: () => EQN, rec, st, quickDuck, play, stop, setTempo, launch, setSync, addNode, removeNode, connect, openMachine, VIEW, sendFx, applyMix, removeWire: w => removeWire(w), sendWires: () => SW, LU, Gate, kw, luMeter, matchTarget, sendMst, setInsert: v => setInsert(v), recButton, AIN, CLP, SONG, ainOpen, ainClose, ainMeasure, ainOffF, clipImport, clipRecButton, armToggle, setSong, ensureArr, ensureCtx, secL, openArr }) });
 
 H.linked = id => !!(D[id] && D[id].c.sync);
 H.outDelay = () => M.lat || 0;   // seconds every machine's sound is held back to line up with the slowest
@@ -1191,13 +1226,16 @@ function relisten(id) {
   for (const n of want) if (!L.from.includes(n)) { n.connect(L.g); L.from.push(n); }
 }
 function relistenAll() { for (const id in LSN) relisten(id); }
-function unlisten(id) { const L = LSN[id]; if (!L) return; for (const n of L.from) { try { n.disconnect(L.g); } catch (e) {} } try { L.g.disconnect(); L.dl.disconnect(); } catch (e) {} delete LSN[id]; }
+function unlisten(id) { const L = LSN[id]; if (!L) return; for (const d of DL) if (d.ch && d.ch.dest === L.g) reroute(d.ch, null); for (const n of L.from) { try { n.disconnect(L.g); } catch (e) {} } try { L.g.disconnect(); L.dl.disconnect(); } catch (e) {} delete LSN[id]; }
 H.listen = (id, src) => {
   if (!D[id]) return null; ensureCtx();
-  let L = LSN[id]; if (!L) { L = LSN[id] = { g: gainNode(1), dl: H.ctx.createDelay(1), src: '', from: [] }; L.dl.delayTime.value = 0; L.g.connect(L.dl); }
+  let L = LSN[id]; if (!L) { L = LSN[id] = { g: gainNode(1), dl: H.ctx.createDelay(1), src: '', from: [] }; L.dl.delayTime.value = 0; L.g.connect(L.dl); if (isThru(id)) setTimeout(() => { applyGraph(); dirty = true; }, 0); }
   L.src = typeof src === 'string' ? src : ''; relisten(id); return L.dl;
 };
 H.sources = id => DL.filter(d => d.id !== id && st.nodes[d.id]).map(d => ({ id: d.id, name: d.name }));
+// a machine with an In: who is plugged into it, and how many frames the rack holds every other machine back (its own voice waits that long too)
+H.plugged = id => st.wires.filter(w => w.k === 'plug' && w.b === id && st.nodes[w.a]).map(w => nameOf(w.a));
+H.lineUp = () => M.latF | 0;
 function tellFx(d) {
   if (!d.fxFn || !d.loaded) return;
   const reverb = sharedRoom(d), delay = sharedEcho(d), bare = !!M.bare, key = (reverb ? 1 : 0) + (delay ? 2 : 0) + (bare ? 4 : 0);
@@ -1253,7 +1291,7 @@ function wake(d) {
 }
 function sleepCheck(now) {
   for (const d of DL) {
-    if (!d.ch || d.asleep || !d.adapter) continue;
+    if (!d.ch || d.asleep || !d.adapter || d.aud) continue;
     if (H.visible(d.id) || d.q || now - d.loudT < SLEEP_AFTER || now - d.wakeT < SLEEP_AFTER) continue;
     let playing = false; try { playing = !!d.adapter.playing(); } catch (e) {}
     // a nap machine may rest while playing: silent for 2.5 s and no note started since. Its next note wakes it.
@@ -1287,9 +1325,10 @@ H.register = (id, a, w) => {
   d.adapter = a; d.win = w; d.ready = false; d.prepP = null; d.q = null; a._regT = performance.now(); arrDirty = true;
   wake(d);
   if (d.c.sync) applyTempo(d);
-  if (H.ctx && d.c.sync) prep(d);
+  if (H.ctx && (d.c.sync || hasPlugs(id))) prep(d);
   d.kAd = undefined; keyRefresh(d);
   d.nListen = null; noteSync();
+  if (d.aud) ainRestore();
   render();
 };
 H.reapply = id => { const d = D[id]; if (d && d.c.sync) applyTempo(d); };
@@ -1325,6 +1364,7 @@ function ensureCtx() {
   M.an = ctx.createAnalyser(); M.an.fftSize = 1024; M.post.connect(M.an);   // master meter and the Output scope
   M.grAn = ctx.createAnalyser(); M.grAn.fftSize = 1024;                     // the glue compressor's gain reduction
   M.click = gainNode(0.42); M.click.connect(ctx.destination);
+  M.ping = gainNode(1); M.ping.connect(ctx.destination);   // the round-trip measurement's clicks leave here
   // Never connected to anything: a node parked here has an output, so the browser never pulls it, and it never runs again.
   M.grave = gainNode(0); M.graveKeep = [];
   M.duckP = ctx.audioWorklet ? ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([DUCK_SRC], { type: 'application/javascript' }))) : Promise.reject(new Error('no AudioWorklet'));
@@ -1349,7 +1389,8 @@ function ensureCtx() {
   setInterval(updateLatency, 500);
   startLoadMeter(ctx);
   ctx.resume().catch(() => {});
-  setTimeout(() => DL.forEach(d => { if (d.adapter && d.c.sync) prep(d); }), 60);
+  setTimeout(() => DL.forEach(d => { if (d.adapter && (d.c.sync || hasPlugs(d.id))) { prep(d); if (hasPlugs(d.id)) wake(d); } }), 60);
+  setTimeout(ainRestore, 80);
   return ctx;
 }
 // A machine's channel: input → power → latency delay → fader → pan → mute → duck → route. The meter and the recorder
@@ -1368,7 +1409,9 @@ function makeCh(d) {
     sRv: gainNode(0), sDl: gainNode(0), iRv: gainNode(1), iRvP: gainNode(1), iRvG: gainNode(0), iAn: ctx.createAnalyser(),
     iDl: gainNode(1), iDlG: gainNode(0), pw: 1 };
   ch.pan.pan.value = d.c.pan; ch.comp.delayTime.value = 0; ch.an.fftSize = 1024; ch.iAn.fftSize = 1024;
-  d.asleep = !(H.visible(d.id) || (d.c.arm && d.c.sync));
+  // an audio track's live input is heard through dIn: straight into the fader, where its tape plays too, with no line-up delay
+  if (d.aud) { ch.dIn = gainNode(1); ch.dIn.connect(ch.fader); }
+  d.asleep = !(d.aud || H.visible(d.id) || (d.c.arm && d.c.sync));
   if (!d.asleep) { ch.in.connect(ch.pwr); ch.iRv.connect(ch.iRvP); ch.iDl.connect(ch.iDlG); }
   ch.pwr.connect(ch.comp); ch.comp.connect(ch.fader); ch.fader.connect(ch.pan); ch.pan.connect(ch.mute); ch.mute.connect(ch.dk); ch.po.connect(ch.xf); ch.po.connect(ch.an);
   ch.dka.connect(ch.dk.gain);
@@ -1566,9 +1609,9 @@ function setEqChain(ch, ids) {
   setTimeout(() => { try { ch.dk.disconnect(old.head); } catch (e) {} dropChain(old); }, 90);
 }
 // The EQs on a node's way out, nearest first.
-function eqPath(id) { const o = []; let n = id, g = 0; while (n && g++ < 32) { const w = audioWire(n); if (!w) break; if (typeOf(w.b) === 'eq') o.push(w.b); n = w.b; } return o; }
+function eqPath(id) { const o = []; let n = id, g = 0; while (n && g++ < 32) { const w = audioWire(n); if (!w || w.k) break; if (typeOf(w.b) === 'eq') o.push(w.b); n = w.b; } return o; }
 // every insert (EQ or Saturator) on a node's way out, nearest first: the order its channel runs through their copies
-function insPath(id) { const o = []; let n = id, g = 0; while (n && g++ < 32) { const w = audioWire(n); if (!w) break; if (isIns(typeOf(w.b))) o.push(w.b); n = w.b; } return o; }
+function insPath(id) { const o = []; let n = id, g = 0; while (n && g++ < 32) { const w = audioWire(n); if (!w || w.k) break; if (isIns(typeOf(w.b))) o.push(w.b); n = w.b; } return o; }
 function syncEqs() {
   if (!H.ctx) return;
   for (const id in st.nodes) { const t = typeOf(id); if (t === 'eq' && !EQ[id]) makeEq(id); else if (t === 'sat' && !SAT[id]) makeSat(id); }
@@ -2204,6 +2247,7 @@ function setInsert(want) {
 }
 function destNode(id) {
   const w = audioWire(id); if (!w || !H.ctx) return null;
+  if (w.k === 'plug') return LSN[w.b] ? LSN[w.b].g : null;   // the In of the machine it is plugged into (there once that machine has loaded)
   if (w.b === 'out') return M.bus;
   if (typeOf(w.b) === 'bus') { if (!B[w.b]) makeBus(w.b); return B[w.b].in; }
   if (typeOf(w.b) === 'duck') { if (!DK[w.b]) makeDuck(w.b); return DK[w.b].in; }
@@ -2213,6 +2257,7 @@ function destNode(id) {
 }
 function onAir(id) {
   const w = audioWire(id); if (!w) return false;
+  if (w.k === 'plug') return onAir(w.b);
   const tb = typeOf(w.b);
   return w.b === 'out' || ((tb === 'bus' || tb === 'duck' || isIns(tb)) && onAir(w.b));
 }
@@ -2326,12 +2371,14 @@ function updateLatency(fresh) {   // fresh: Play, before bar 1, so a figure may 
   let mx = 0;
   DL.forEach(d => {
     if (!d.ch || !d.adapter) { d.latF = 0; return; }
+    if (isThru(d.id)) return;   // set below: it takes sound that is already lined up, so it must add no delay of its own
     let f = NaN; try { if (d.adapter.latency) f = +d.adapter.latency(); } catch (e) {}
     const m = isFinite(f) && f >= 0 ? f : devLat(d);
     // While playing, a figure only grows: a moving compensation delay is a jump in that channel's audio. Shrinks wait for Stop.
     d.latF = H.playing && !fresh ? Math.max(d.latF, m) : m;
     if (d.latF > mx) mx = d.latF;
   });
+  DL.forEach(d => { if (isThru(d.id) && d.ch && d.adapter) d.latF = mx; });   // its own voice starts that much later instead (RACK.lineUp)
   const sr = H.ctx.sampleRate, t = H.ctx.currentTime;
   DL.forEach(d => { if (!d.ch) return; const v = d.adapter ? (mx - d.latF) / sr : mx / sr; if (Math.abs(d.ch.comp.delayTime.value - v) > 1e-6) d.ch.comp.delayTime.setValueAtTime(v, t); });
   const ch = M.latF !== mx;
@@ -2340,7 +2387,8 @@ function updateLatency(fresh) {   // fresh: Play, before bar 1, so a figure may 
 }
 function setPwr(d, on) { if (d.ch) { const t = H.ctx.currentTime; d.ch.pw = on ? 1 : 0; d.ch.pwr.gain.setTargetAtTime(on ? 1 : 0, t, 0.01); d.ch.iRvP.gain.setTargetAtTime(on ? 1 : 0, t, 0.01); applyMix(); } }
 // A param an automation lane is playing (AU.act) is left to the lane: its knob takes over again when the lane lets go.
-const muteF = d => (d.c.mute || (DL.some(x => x.loaded && x.c.solo) && !d.c.solo) ? 0 : 1);
+const soloKin = d => { const pw = plugOf(d.id); if (pw && D[pw.b] && D[pw.b].loaded && D[pw.b].c.solo) return true; return isThru(d.id) && st.wires.some(w => w.k === 'plug' && w.b === d.id && D[w.a] && D[w.a].loaded && D[w.a].c.solo); };
+const muteF = d => (d.c.mute || (DL.some(x => x.loaded && x.c.solo) && !d.c.solo && !soloKin(d)) ? 0 : 1);
 function applyMix() {
   if (!H.ctx) return;
   const t = H.ctx.currentTime, own = k => AU.act.has(k) || MOD.on.has(k);
@@ -2408,7 +2456,7 @@ function loadMachine(d) {
   if (d.loaded) return;
   d.loaded = true;
   d.asleep = true;
-  const f = el('iframe', { src: d.src, title: d.name, allow: 'autoplay; midi' });
+  const f = el('iframe', { src: d.src, title: d.name, allow: 'autoplay; midi; microphone' });
   FR[d.id] = f; $('#frames').append(f);
   f.addEventListener('load', () => themeFrame(f));
   if (H.ctx && !d.ch) makeCh(d);
@@ -2416,6 +2464,7 @@ function loadMachine(d) {
 function unloadMachine(d) {
   if (!d.loaded) return;
   unlisten(d.id);
+  if (d.aud) { ainClose(d.id, true); CLP.arm.delete(d.id); }
   try { if (d.adapter && d.adapter.playing()) d.adapter.stop(); } catch (e) {}
   if (d.ch && H.ctx) {
     const old = d.ch.in;
@@ -2459,7 +2508,18 @@ async function play() {
   if (pend.length) await Promise.race([Promise.all(pend), sleep(3000)]);
   if (!H.playing) return;
   updateLatency(true);   // fresh figures before bar 1 (they may shrink here): compensation in place for the first hit, and the take starts on the true bar line
-  const t0 = ctx.currentTime + 0.15;
+  let t0 = ctx.currentTime + 0.15;
+  // Count-in: a recording of a live input that starts with Play gets one or two bars of clicks first, so you can come in on bar 1
+  if (song && st.cin > 0 && CLP.rec && CLP.rec.state === 'armed' && [...CLP.rec.ms].some(id => D[id] && D[id].aud)) {
+    const beat = 60 / H.bpm, n = st.cin * 4, c0 = ctx.currentTime + 0.12;
+    t0 = c0 + n * beat; M.cin = true;
+    toast('Count-in: ' + plural(st.cin, 'bar') + '. Recording starts on bar 1.');
+    for (let i = 0; i < n && H.playing; i++) { const tc = c0 + i * beat; while (H.playing && ctx.currentTime < tc - 0.25) await sleep(25); if (H.playing) click(tc, i % 4 === 0); }
+    while (H.playing && ctx.currentTime < t0 - 0.2) await sleep(20);
+    M.cin = false;
+    if (!H.playing) return;
+    if (t0 < ctx.currentTime + 0.05) t0 = ctx.currentTime + 0.15;
+  }
   H.map.reset(0, t0, H.bpm);
   DL.forEach(relink);
   sendMaps();
@@ -2476,7 +2536,8 @@ function stop() {
     else recEnd(Math.max(rec.p0 + 16, Math.ceil(H.map.posAt(ctx.currentTime) / 16 - 1e-9) * 16));
   }
   if (rec.state === 'armed') rec.state = 'idle';
-  if (ctx && H.playing) clipRecStop(); else if (CLP.rec && CLP.rec.state === 'armed') CLP.rec = null;
+  if (ctx && H.playing && !M.cin) clipRecStop(); else if (CLP.rec && CLP.rec.state === 'armed') CLP.rec = null;
+  M.cin = false;
   clipStop();
   if (JAM.on) jamEnd(ctx && H.playing ? Math.ceil(H.map.posAt(ctx.currentTime) / 16 - 1e-9) * 16 : null);
   auStop();
@@ -3285,7 +3346,7 @@ function hostTick() {
   }
   const pn = performance.now();
   if (pn - sleepT > 250) { sleepT = pn; sleepCheck(pn); if (st.sup) plumbAll(); }
-  if (H.playing) {
+  if (H.playing && !M.cin) {
     if (!st.click) metro.p = Math.ceil(H.map.posAt(now) / 4 - 1e-9) * 4;
     else {
       let guard = 0;
@@ -3436,7 +3497,7 @@ function tapOn() {
   if (!M.tap || M.tapOn) return;
   M.tapOn = true;
   M.post.connect(M.tap, 0, 0);
-  DL.forEach((d, i) => { if (d.ch && d.loaded && onAir(d.id)) d.ch.po.connect(M.tap, 0, i + 1); });
+  DL.forEach((d, i) => { if (d.ch && d.loaded && onAir(d.id) && !plugOf(d.id)) d.ch.po.connect(M.tap, 0, i + 1); });   // a plugged machine is in the stem of the machine it plays through
   FXS.forEach((id, j) => { if (FX[id] && onAir(id)) FX[id].po.connect(M.tap, 0, 1 + DEVS.length + j); });
   M.tap.connect(M.tapZ);
 }
@@ -3637,7 +3698,8 @@ function shell(id, title, code, body, ports) {
 }
 function buildMachine(d) {
   const x = S[d.id] = {};
-  x.launch = el('button', { class: 'btn sm launch', type: 'button' }, '—'); x.launch.onclick = () => launch(d);
+  x.launch = el('button', { class: 'btn sm launch', type: 'button' }, '—'); x.launch.onclick = () => (d.aud ? armToggle(d) : launch(d));
+  if (d.aud) x.launch.title = 'Arm: Rec clip (Arranger) records what comes in onto this track’s tape';
   x.open = el('button', { class: 'btn sm', type: 'button', title: 'Show its panel in the dock' }, 'Open'); x.open.onclick = () => (st.open === d.id ? closeDock() : openMachine(d.id));
   x.state = el('div', { class: 'state x' }, 'Loading…');
   meterEl(x);
@@ -3660,7 +3722,8 @@ function buildMachine(d) {
   const np = [];
   if (d.nin) np.push(port(d.id, 'in', 'note', 'Notes in: ' + (NIH[d.id] || 'another machine or a note node plays this one')));
   if (d.nout) np.push(port(d.id, 'out', 'note', 'Notes out: drag to another machine’s notes in, or a note node'));
-  return shell(d.id, d.name, d.code, body, [port(d.id, 'in', 'clk', 'Clock in: wire the Clock here to sync'), port(d.id, 'out', 'aud', 'Audio out'), ...np]);
+  if (d.ain) np.push(port(d.id, 'in', 'plug', 'In: drag another machine’s audio out here and it plays through this one. Drag away from here to unplug the last one.'));
+  return shell(d.id, d.name, d.code, body, [d.aud ? null : port(d.id, 'in', 'clk', 'Clock in: wire the Clock here to sync'), port(d.id, 'out', 'aud', 'Audio out'), ...np].filter(Boolean));
 }
 function buildClock() {
   const x = S.clock = {};
@@ -4475,10 +4538,10 @@ function buildNode(id) {
 function placeNode(id) { const n = st.nodes[id], N = NODES[id]; if (N) N.el.style.transform = `translate(${n.x}px,${n.y}px)`; }
 
 /* ---------- wires ---------- */
-const portPos = (id, side, kind) => { const n = st.nodes[id], y = n.y + (kind === 'key' || (kind === 'note' && typeOf(id) === 'machine') ? NOTE_Y : PORT_Y); return side === 'out' ? [n.x + NODE_W[typeOf(id)], y] : [n.x, y]; };
+const portPos = (id, side, kind) => { const n = st.nodes[id], y = n.y + (kind === 'plug' ? PLUG_Y : kind === 'key' || (kind === 'note' && typeOf(id) === 'machine') ? NOTE_Y : PORT_Y); return side === 'out' ? [n.x + NODE_W[typeOf(id)], y] : [n.x, y]; };
 function bez(x1, y1, x2, y2) { const dx = Math.max(48, Math.abs(x2 - x1) * 0.5); return [x1, y1, x1 + dx, y1, x2 - dx, y2, x2, y2]; }
 const pathD = c => `M${c[0]} ${c[1]}C${c[2]} ${c[3]} ${c[4]} ${c[5]} ${c[6]} ${c[7]}`;
-const wireCurve = w => { const a = portPos(w.a, 'out', w.k === 'note' ? 'note' : ''), b = portPos(w.b, 'in', w.k === 'key' || w.k === 'note' ? w.k : ''); if (w.k === 'mod') b[1] += 10; return bez(a[0], a[1], b[0], b[1]); };
+const wireCurve = w => { const a = portPos(w.a, 'out', w.k === 'note' ? 'note' : ''), b = portPos(w.b, 'in', w.k === 'key' || w.k === 'note' || w.k === 'plug' ? w.k : ''); if (w.k === 'mod') b[1] += 10; return bez(a[0], a[1], b[0], b[1]); };
 // Send wires are drawn from the send levels: a machine with its Rev or Dly knob up, a machine whose own reverb plays
 // into the shared room, and the Dub Delay's → Rev. Rebuilt with the other wires; never stored.
 let SW = [], swSig = '';
@@ -4509,7 +4572,7 @@ function buildWires() {
   setSel(SEL && SEL.wire && allWires().includes(SEL.wire) ? SEL : (SEL && SEL.node ? SEL : null));
 }
 function wiresOf(id) { for (const w of allWires()) if ((w.a === id || w.b === id) && w._p) w._p.setAttribute('d', pathD(wireCurve(w))); if (SEL && SEL.wire && (SEL.wire.a === id || SEL.wire.b === id)) placeCut(); }
-const kindOf = k => (k === 'key' ? 'key' : k === 'snd' ? 'snd' : k === 'mod' ? 'mod' : k === 'note' ? 'note' : '');
+const kindOf = k => (k === 'key' ? 'key' : k === 'snd' ? 'snd' : k === 'mod' ? 'mod' : k === 'note' ? 'note' : k === 'plug' ? 'plug' : '');
 function updatePorts() {
   const all = allWires();
   for (const p of WORLD.querySelectorAll('.port')) {
@@ -4549,6 +4612,14 @@ function connect(a, b, k) {
   if (k === 'mod') return;
   if (k === 'note') { if (canWire(a, b, 'note') && !hasWire(a, b, 'note')) { st.wires.push({ a, b, k: 'note' }); toast(nameOf(a) + ' now plays ' + nameOf(b) + (typeOf(b) === 'machine' ? '. Its own pattern keeps playing too: mute steps or pick an empty pattern there.' : '.')); } graphChanged(); return; }
   if (k === 'snd') { if (canWire(a, b, k) && !SW.some(w => w.a === a && w.b === b)) makeSend(a, b); else graphChanged(); return; }
+  if (k === 'plug') {   // one way out per machine: into the other machine's In instead of where it went
+    if (canWire(a, b, k) && !hasWire(a, b, k)) {
+      st.wires = st.wires.filter(w => !(w.a === a && (!w.k || w.k === 'plug')));
+      st.wires.push({ a, b, k });
+      toast(nameOf(a) + ' now plays through ' + nameOf(b) + '. Open ' + nameOf(b) + ' and touch the pad.');
+    }
+    applyMix(); graphChanged(); return;
+  }
   if (!canWire(a, b, k) || hasWire(a, b, k)) { graphChanged(); return; }
   if (k) {   // a key wire only listens: the machine keeps its own route, and a Duck can listen to several machines
     st.wires.push({ a, b, k });
@@ -4559,14 +4630,29 @@ function connect(a, b, k) {
   }
   const ta = typeOf(a), tb = typeOf(b);
   // one destination per machine / bus / Duck / Output; one source into a machine's clock in and into Rec
-  st.wires = st.wires.filter(w => w.k || !((ta !== 'clock' && w.a === a) || ((tb === 'machine' || tb === 'rec' || tb === 'mst') && w.b === b)));
+  st.wires = st.wires.filter(w => w.k ? !(w.k === 'plug' && w.a === a) : !((ta !== 'clock' && w.a === a) || ((tb === 'machine' || tb === 'rec' || tb === 'mst') && w.b === b)));
   st.wires.push({ a, b });
   if (a === 'out' && b === 'mst' && !st.wires.some(w => w.b === 'rec')) { st.wires.push({ a: 'mst', b: 'rec' }); toast('Output → Master → Rec: the chain is on what you hear and what you record.'); }
   else if (a === 'out' && b === 'rec' && st.nodes.mst) toast('The Master is bypassed: Output goes straight to Rec. Wire Output into the Master to bring it back.');
   graphChanged();
   if (tb === 'duck' && hasWire(a, b, 'key')) toast(D[a].name + ' is this Duck’s key: it goes through, unducked.');
 }
-function removeWire(w, quiet) { if (w.k === 'snd') { unSend(w); return; } st.wires = st.wires.filter(x => x !== w); if (SEL && SEL.wire === w) SEL = null; if (!quiet) graphChanged(); }
+function removeWire(w, quiet) { if (w.k === 'snd') { unSend(w); return; } st.wires = st.wires.filter(x => x !== w); if (w.k === 'plug' && st.nodes[w.a] && !audioWire(w.a)) { st.wires.push({ a: w.a, b: 'out' }); if (!quiet) toast(nameOf(w.a) + ' goes straight to the Output again.'); } if (SEL && SEL.wire === w) SEL = null; if (!quiet) graphChanged(); }
+/* Plug wires need two things from the rack. The machine they go into must have its audio started and be awake, also when it is
+   off the clock or not armed (otherwise what is plugged in has nowhere to go and is silent). And when a machine is unplugged,
+   the machine it played through is told (adapter.unplugged), so it can drop the echoes, tails and held loops it still has of it. */
+const PLG = {};
+const hasPlugs = id => isThru(id) && st.wires.some(w => w.k === 'plug' && w.b === id && st.nodes[w.a]);
+function plugSync() {
+  for (const t of DEVS) {
+    if (!t.ain) continue;
+    const d = D[t.id], now = new Set(st.nodes[t.id] ? st.wires.filter(w => w.k === 'plug' && w.b === t.id && st.nodes[w.a]).map(w => w.a) : []);
+    const was = PLG[t.id]; PLG[t.id] = now;
+    if (!d || !d.loaded || !d.adapter) continue;
+    if (now.size && H.ctx) { prep(d); wake(d); }
+    if (was) { let gone = false; for (const a of was) if (!now.has(a)) gone = true; if (gone) setTimeout(() => { try { if (d.adapter && d.adapter.unplugged) d.adapter.unplugged(); } catch (e) { console.error(e); } }, 45); }   // after the 30 ms the wire takes to fade out
+  }
+}
 function applyGraph() {
   for (const d of DL) {
     if (!d.loaded) continue;
@@ -4580,6 +4666,7 @@ function applyGraph() {
   for (const id in DK) if (st.nodes[id]) reroute(DK[id], destNode(id));
   for (const id in FX) if (st.nodes[id]) reroute(FX[id], destNode(id));
   for (const d of DL) if (d.ch && d.loaded) reroute(d.ch, destNode(d.id));
+  plugSync();
   syncDucks(); syncEqs(); tellAll();
   if (st.nodes.mst) makeMst();
   setInsert(mstIn());
@@ -4598,6 +4685,7 @@ function addNode(kind, wx, wy, bare) {
   if (kind === 'duck') { id = ''; for (let i = 1; i <= MAX_DUCK; i++) if (!st.nodes['duck' + i]) { id = 'duck' + i; break; } if (!id) { toast('Four Ducks is the limit.'); return; } }
   if (kind === 'eq') { id = ''; for (let i = 1; i <= MAX_EQ; i++) if (!st.nodes['eq' + i]) { id = 'eq' + i; break; } if (!id) { toast('Four EQs is the limit.'); return; } }
   if (kind === 'sat') { id = ''; for (let i = 1; i <= MAX_SAT; i++) if (!st.nodes['sat' + i]) { id = 'sat' + i; break; } if (!id) { toast('Four Saturators is the limit.'); return; } }
+  if (kind === 'audio') { id = ''; for (let i = 1; i <= 4; i++) if (!st.nodes['audio' + i]) { id = 'audio' + i; break; } if (!id) { toast('Four audio tracks is the limit.'); return; } }
   if (st.nodes[id]) { flyTo(id); return; }
   const ty = typeOf(id); if (!ty) return;
   if (ty === 'mst' && wx == null) {
@@ -4618,11 +4706,11 @@ function addNode(kind, wx, wy, bare) {
     toast(nameOf(id) + ' added. Drag its Out onto any node and pick the knob it moves.');
   } else if (ty === 'machine') {
     const d = D[id];
-    d.c.sync = true;
+    d.c.sync = !d.aud;
     loadMachine(d);
-    st.wires.push({ a: 'clock', b: id });
+    if (!d.aud) st.wires.push({ a: 'clock', b: id });
     st.wires.push({ a: id, b: 'out' });
-    toast(d.name + ' added and wired to Clock and Output. It is loading.');
+    toast(d.aud ? d.name + ' added and wired to Output. Open it to pick an input or load a file; its clips sit on its row in the Arranger’s Song view.' : d.name + ' added and wired to Clock and Output. It is loading.');
   } else if (ty === 'bus') {
     st.bus[id] = st.bus[id] || { vol: 0.8, mute: false };
     if (H.ctx) makeBus(id);
@@ -4710,6 +4798,7 @@ const insertEq = src => insertIns(src, 'eq');
 function insertIns(src, kind) {
   const ts = typeOf(src); if (!['machine', 'fx', 'duck', 'bus', 'eq', 'sat'].includes(ts)) return;
   const prev = audioWire(src), dest = prev ? prev.b : 'out', what = kind === 'sat' ? 'Saturator' : 'EQ';
+  if (prev && prev.k === 'plug') { toast(nameOf(src) + ' plays through ' + nameOf(dest) + ': put the ' + what + ' after ' + nameOf(dest) + ' (right-click it).'); return; }
   if (typeOf(dest) === 'duck') { toast(nameOf(src) + ' goes into ' + nameOf(dest) + ': put the ' + what + ' after the Duck (right-click the Duck → Insert ' + (kind === 'sat' ? 'a Saturator' : 'an EQ') + ').'); return; }
   const H0 = kind === 'sat' ? 600 : 480;
   const n = st.nodes[src], nw = NODE_W[ts], dn = st.nodes[dest], gap = dn ? dn.x - (n.x + nw) : 0;
@@ -4748,7 +4837,9 @@ function removeNode(id) {
   const dOut = ty === 'duck' ? audioWire(id) : null, dIns = ty === 'duck' ? st.wires.filter(w => !w.k && w.b === id).map(w => w.a) : [];
   const eOut = isIns(ty) ? audioWire(id) : null, eIns = isIns(ty) ? st.wires.filter(w => !w.k && w.b === id).map(w => w.a) : [];
   const mRec = ty === 'mst' && hasWire('mst', 'rec');
+  const pIns = st.wires.filter(w => w.k === 'plug' && w.b === id).map(w => w.a);   // machines plugged into it go straight to the Output again
   st.wires = st.wires.filter(w => w.a !== id && w.b !== id);
+  for (const a of pIns) st.wires.push({ a, b: 'out' });
   if (ty === 'mst') {
     if (mRec && !st.wires.some(w => w.a === 'out')) st.wires.push({ a: 'out', b: 'rec' });
     dropMst();
@@ -4777,7 +4868,7 @@ function removeNode(id) {
   if (ty === 'mod') { delete st.mod[id]; dropModEnv(id); toast(nameOf(id).replace(/ \d+$/, '') + ' removed. Its knobs are back where they were set.'); }
   for (const k in st.mod) if (st.mod[k].src === id) st.mod[k].src = '';
   if (SEL && SEL.node === id) SEL = null;
-  if (ty === 'machine') { unloadMachine(D[id]); toast(D[id].name + ' removed and unloaded. Its patterns are kept: add it again from + Add.'); }
+  if (ty === 'machine') { unloadMachine(D[id]); toast(D[id].aud ? D[id].name + ' removed. Its clips stay in the song: add it again from + Add and they are back on its row.' : D[id].name + ' removed and unloaded. Its patterns are kept: add it again from + Add.'); }
   if (ty === 'fx') { dropFx(id); toast(id === 'verb' ? 'Reverb removed. Machines are back on their own reverbs.' : 'Dub Delay removed.'); }
   if (ty === 'bus' && B[id]) {
     const b = B[id]; delete B[id];
@@ -4924,19 +5015,33 @@ function startWire(e, p) {
   let id = p.dataset.n, side = p.dataset.s, kind = kindOf(p.dataset.k), picked = false;
   // dragging from a single input that already has a wire picks that wire up
   if (side === 'in' && !kind && kind !== 'note') { const ty = typeOf(id); if (ty === 'machine' || ty === 'rec' || ty === 'mst') { const w = st.wires.find(w => w.b === id && !w.k); if (w) { removeWire(w, true); buildWires(); id = w.a; side = 'out'; picked = true; } } }
-  const anchor = portPos(id, side, kind);
+  // an In with machines plugged into it: pulling away from it takes the last one plugged in with you (dropped on nothing, it goes
+  // straight to the Output again). It only lets go once the pointer has moved, so a tap on the In changes nothing.
+  let pull = null;
+  if (side === 'in' && kind === 'plug') { for (const w of st.wires) if (w.k === 'plug' && w.b === id && st.nodes[w.a]) pull = w; }
+  const x0 = e.clientX, y0 = e.clientY;
+  let anchor = portPos(id, side, kind);
   const ports = [...WORLD.querySelectorAll('.port')];
   const kOf = q => kindOf(q.dataset.k);
-  for (const q of ports) {
-    const ok = q.dataset.s !== side && (kOf(q) === 'note') === (kind === 'note') && (side === 'out' ? canWire(id, q.dataset.n, kOf(q)) : canWire(q.dataset.n, id, kind));
-    tog(q, 'ok', ok); tog(q, 'src', q.dataset.n === id && q.dataset.s === side && kOf(q) === kind);
-  }
+  const mark = () => {
+    for (const q of ports) {
+      const ok = q.dataset.s !== side && (kOf(q) === 'note') === (kind === 'note') && (side === 'out' ? canWire(id, q.dataset.n, kOf(q)) : canWire(q.dataset.n, id, kind));
+      tog(q, 'ok', ok); tog(q, 'src', q.dataset.n === id && q.dataset.s === side && kOf(q) === kind);
+    }
+  };
+  mark();
   const modDrag = kind === 'mod';
   if (modDrag) for (const nid in NODES) tog(NODES[nid].el, 'mok', canWire(id, nid, 'mod'));
   WORLD.classList.add('wiring');
   const tmp = document.createElementNS(SVGNS, 'path'); tmp.setAttribute('class', 'w tmp'); SVG.append(tmp);
   const r = CV.getBoundingClientRect();
-  const draw = ev => { const [wx, wy] = toWorld(ev.clientX - r.left, ev.clientY - r.top); tmp.setAttribute('d', pathD(side === 'out' ? bez(anchor[0], anchor[1], wx, wy) : bez(wx, wy, anchor[0], anchor[1]))); };
+  const draw = ev => {
+    if (pull && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 8) {
+      const w = pull; pull = null;
+      if (st.wires.includes(w)) { removeWire(w, true); buildWires(); SVG.append(tmp); id = w.a; side = 'out'; kind = ''; picked = true; anchor = portPos(id, side, kind); mark(); }
+    }
+    const [wx, wy] = toWorld(ev.clientX - r.left, ev.clientY - r.top); tmp.setAttribute('d', pathD(side === 'out' ? bez(anchor[0], anchor[1], wx, wy) : bez(wx, wy, anchor[0], anchor[1])));
+  };
   draw(e);
   p.setPointerCapture(e.pointerId);
   const up = ev => {
@@ -4947,7 +5052,7 @@ function startWire(e, p) {
     for (const x of ports) { tog(x, 'ok', false); tog(x, 'src', false); }
     if (modDrag) { for (const nid in NODES) tog(NODES[nid].el, 'mok', false); const nd = hit && hit.closest && hit.closest('.node'); if (nd && canWire(id, nd._id, 'mod')) modPick(id, nd._id, ev.clientX - r.left, ev.clientY - r.top); return; }
     if (q) { if (side === 'out') connect(id, q.dataset.n, kOf(q)); else connect(q.dataset.n, id, kind); }
-    else if (picked) graphChanged();
+    else if (picked) { graphChanged(); if (side === 'out' && !kind && typeOf(id) === 'machine' && hasWire(id, 'out') && DEVS.some(t => t.ain && st.nodes[t.id])) toast(nameOf(id) + ' goes straight to the Output again.'); }
   };
   p.addEventListener('pointermove', draw); p.addEventListener('pointerup', up); p.addEventListener('pointercancel', up);
 }
@@ -4976,6 +5081,11 @@ CV.addEventListener('contextmenu', e => {
         const dd = D[id];
         items.push(dd.c.rvOwn ? { label: 'Play into the shared Reverb', meta: 'Its own reverb switches off', on: () => makeSend(id, 'verb') }
                               : { label: 'Use its own reverb', meta: 'Leaves the shared room', on: () => { const w = SW.find(w => w.a === id && w.b === 'verb'); if (w) unSend(w); } });
+      }
+      if (ty === 'machine' && !isThru(id)) {
+        const pw = plugOf(id);
+        for (const t of DEVS) if (t.ain && st.nodes[t.id]) items.push(pw && pw.b === t.id ? { label: 'Unplug from ' + t.name, meta: 'Straight to the Output again', on: () => removeWire(pw) }
+                                                                                         : { label: 'Play through ' + t.name, meta: 'Its sound goes through the pad’s effects', on: () => connect(id, t.id, 'plug') });
       }
       const cur = duckOf(id), keys = cur ? st.wires.filter(w => w.k === 'key' && w.b === cur).map(w => w.a) : [];
       const others = [...DRUMS, ...DEVS.map(x => x.id).filter(m => !DRUMS.includes(m))].filter(m => m !== id && st.nodes[m] && !(cur && st.duck[cur].mode === 'key' && keys.includes(m)));
@@ -5033,7 +5143,8 @@ function hideMenu() { if (!MENU.hidden) { MENU.hidden = true; MENU.textContent =
 function showAdd(sx, sy, atPoint) {
   const at = atPoint ? toWorld(sx, sy) : null;
   const items = [];
-  for (const d of DEVS) if (!st.nodes[d.id]) items.push({ label: d.name, meta: d.code + ' · ' + d.kind, on: () => addNode(d.id, at && at[0], at && at[1]) });
+  for (const d of DEVS) if (!st.nodes[d.id] && !d.aud) items.push({ label: d.name, meta: d.code + ' · ' + d.kind, on: () => addNode(d.id, at && at[0], at && at[1]) });
+  if (DEVS.some(d => d.aud && !st.nodes[d.id])) items.push({ label: 'Audio track', meta: 'Record mic, line or hardware · or load a file · clips on the song', on: () => addNode('audio', at && at[0], at && at[1]) });
   const nb = Object.keys(st.nodes).filter(k => typeOf(k) === 'bus').length;
   if (nb < MAX_BUS) items.push({ label: 'Bus', meta: 'Group machines · level + mute', on: () => addNode('bus', at && at[0], at && at[1]) });
   const nd = Object.keys(st.nodes).filter(k => typeOf(k) === 'duck').length;
@@ -5066,7 +5177,7 @@ function showAdd(sx, sy, atPoint) {
    database it shares with the standalone page). Standalone machines are never touched.
    Fresh = all of that cleared, then a reload: the default patch, and each machine opens the way it does the first
    time in the rack (blank patterns, factory sounds, nothing latched, frozen or listening). Buffer stays. */
-const SESS_LS = ['ant07.v1', 'ant06.v1', 'dwn09.rack.v1', 'akb03.rack.v1', 'hextrig.project.v1.rack', 'v101.rack', 'ans12.rack.v1', 'nky32.rack.v1', 'hwn-mx.rack.v1', 'mfr64.rack.v1', 'fwh60.rack.v1', 'ayd08.rack.v1'];
+const SESS_LS = ['ant07.v1', 'ant06.v1', 'dwn09.rack.v1', 'akb03.rack.v1', 'hextrig.project.v1.rack', 'v101.rack', 'ans12.rack.v1', 'nky32.rack.v1', 'hwn-mx.rack.v1', 'mfr64.rack.v1', 'fwh60.rack.v1', 'ayd08.rack.v1', 'sws.rack.v1'];
 const SESS_IDB = [
   { db: 'nkn-08-rack', stores: ['kv', 'smp'], whole: true },
   { db: 'mframadan', stores: ['reels'], pre: 'mfr64.rack.v1:' },
@@ -5397,6 +5508,207 @@ function pendingScene() {
   return '';
 }
 
+
+/* ---------- audio tracks: a live input and audio files on the song's timeline ----------
+   An audio track (Audio 1–4) is a channel like a machine's, with no machine behind it. What it plays is its tape: clips in
+   Song view, recorded from a live input (microphone, line in, an interface with hardware on it) or loaded from audio files.
+   The rack owns the input: getUserMedia with every "voice call" process switched off → the side(s) picked → gain → tap.
+   The tap is what Rec clip records (before the monitor switch), and tap → monitor → the channel's dIn is what you hear.
+   The page in the dock (dev/audio.html) is a panel over H.audio(id).
+   A browser page only gets an input where it is allowed one: a claude.ai artifact is not, a page served from its own
+   https address is. Files work everywhere. */
+const AIN = {};
+const micPolicy = () => { try { const fp = document.permissionsPolicy || document.featurePolicy; return fp && fp.allowsFeature ? fp.allowsFeature('microphone') : true; } catch (e) { return true; } };
+const micCan = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && micPolicy();
+function ainWhy(id) {
+  const a = AIN[id], e = a && a.err;
+  if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) return 'this browser gives pages no audio input (it needs https).';
+  if (!micPolicy()) return 'this page is shown inside a frame that is not allowed a microphone. Open the rack at its own address, or load an audio file instead.';
+  if (e === 'NotAllowedError' || e === 'SecurityError') return 'the browser refused the microphone. Allow it for this site (the icon in the address bar), then turn the input on again.';
+  if (e === 'NotFoundError' || e === 'OverconstrainedError') return 'no input device was found.';
+  if (e === 'NotReadableError') return 'the input is in use by another program.';
+  return e ? 'the input could not be opened (' + e + ').' : 'turn its input on in its panel.';
+}
+function ainWire(id) {
+  const a = AIN[id], c = st.ain[id], d = D[id]; if (!a || !a.src) return;
+  try { a.src.disconnect(); a.sp.disconnect(); a.mg.disconnect(); } catch (e) {}
+  if (c.mode === 'st') a.src.connect(a.trim);
+  else { a.src.connect(a.sp); const k = c.mode === 'r' && a.chs > 1 ? 1 : 0; a.sp.connect(a.mg, k, 0); a.sp.connect(a.mg, k, 1); a.mg.connect(a.trim); }
+  const t = H.ctx.currentTime;
+  a.trim.gain.setTargetAtTime(dbG(c.gain), t, 0.01);
+  a.mon.gain.setTargetAtTime(c.mon && !a.meas ? 1 : 0, t, 0.01);
+  try { a.mon.disconnect(); } catch (e) {}
+  if (d && d.ch && d.ch.dIn) a.mon.connect(d.ch.dIn);
+}
+async function ainOpen(id, dev) {
+  const d = D[id], c = st.ain[id]; if (!d || !c || !d.loaded) return false;
+  if (dev == null) dev = c.dev;
+  const cur = AIN[id];
+  if (cur && cur.tap && (cur.dev === dev || !dev)) return true;
+  if (cur && cur.busy) return cur.busy;
+  const ctx = ensureCtx(); if (!d.ch) makeCh(d);
+  const a = AIN[id] = { err: '', pk: 0, label: '', dev: '' };
+  if (!micCan()) { a.err = 'blocked'; render(); return false; }
+  const ask = dv => navigator.mediaDevices.getUserMedia({ audio: Object.assign({ echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 } }, dv ? { deviceId: { exact: dv } } : {}) });
+  a.busy = (async () => {
+    let stream = null;
+    try { stream = await ask(dev); } catch (e) { if (dev && e && e.name === 'OverconstrainedError') { try { stream = await ask(''); } catch (e2) { a.err = (e2 && e2.name) || 'Error'; } } else a.err = (e && e.name) || 'Error'; }
+    if (cur) ainFree(cur);
+    if (!stream || AIN[id] !== a || !d.loaded) { if (stream) stream.getTracks().forEach(t => t.stop()); a.busy = null; render(); arrDirty = true; return false; }
+    const tr = stream.getAudioTracks()[0], set = tr && tr.getSettings ? tr.getSettings() : {};
+    Object.assign(a, { stream, tr, label: (tr && tr.label) || 'Input', dev: set.deviceId || dev || '', chs: set.channelCount || 1, inLat: isFinite(+set.latency) ? +set.latency : 0,
+      src: ctx.createMediaStreamSource(stream), sp: ctx.createChannelSplitter(2), mg: ctx.createChannelMerger(2), trim: gainNode(1), tap: gainNode(1), mon: gainNode(0), spM: ctx.createChannelSplitter(2), an: ctx.createAnalyser(), anR: ctx.createAnalyser() });
+    a.tap.channelCount = 2; a.tap.channelCountMode = 'explicit'; a.an.fftSize = 1024; a.anR.fftSize = 1024;
+    a.trim.connect(a.tap); a.tap.connect(a.spM); a.spM.connect(a.an, 0); a.spM.connect(a.anR, 1); a.tap.connect(a.mon);   // the meter reads each side on its own
+    c.dev = a.dev; c.on = true; a.err = ''; a.busy = null; save();
+    ainWire(id);
+    if (tr) tr.onended = () => { if (AIN[id] === a) { ainClose(id, true); toast(D[id].name + ': the input went away.'); } };
+    arrDirty = true; render(); return true;
+  })();
+  return a.busy;
+}
+function ainFree(a) {
+  try { if (a.stream) a.stream.getTracks().forEach(t => { t.onended = null; t.stop(); }); } catch (e) {}
+  for (const k of ['src', 'sp', 'mg', 'trim', 'tap', 'mon', 'spM']) try { if (a[k]) a[k].disconnect(); } catch (e) {}
+  a.tap = null; a.src = null;
+}
+// keep: the input was not switched off by hand (the track left the canvas, the device went away), so it opens again next time
+function ainClose(id, keep) { const a = AIN[id]; if (a) ainFree(a); delete AIN[id]; if (!keep && st.ain[id]) { st.ain[id].on = false; save(); } arrDirty = true; render(); }
+// inputs that were on come back by themselves, but only where the browser will not have to ask
+async function ainRestore() {
+  if (!H.ctx || !micCan()) return;
+  let ok = false; try { const p = await navigator.permissions.query({ name: 'microphone' }); ok = p.state === 'granted'; } catch (e) {}
+  if (!ok) return;
+  for (const d of DL) if (d.aud && d.loaded && st.ain[d.id].on && !AIN[d.id]) ainOpen(d.id);
+}
+const ainPk = a => Math.max(peakOf(a.an), peakOf(a.anR));
+const ainEst = id => { const a = AIN[id], ctx = H.ctx; return ((ctx && ctx.baseLatency) || 0) + ((ctx && ctx.outputLatency) || 0) + ((a && a.inLat) || 0); };
+// seconds from "the rack plays it" to "what you played to it is back at the input"
+const ainLat = id => { const c = st.ain[id]; return Math.max(0, (c.rt != null ? c.rt / 1000 : ainEst(id)) + c.trim / 1000); };
+// in frames, and after the Master when it is in (the chain holds what you hear back a little more)
+const ainOffF = id => Math.round(ainLat(id) * H.ctx.sampleRate) + (M.ins ? MST_LAT : 0);
+/* Measure: five clicks go out of the Output, the input is recorded, and the time each click takes to come back is the round
+   trip. It needs the input to hear the output: a microphone near the speaker, or a cable from an output to the input. */
+async function ainMeasure(id) {
+  const a = AIN[id], c = st.ain[id];
+  if (!a || !a.tap) return { ok: false, why: 'Turn the input on first.' };
+  if (H.playing) return { ok: false, why: 'Stop the rack first.' };
+  if (a.meas) return { ok: false, why: 'Already measuring.' };
+  try { await clipRecMod(); } catch (e) { return { ok: false, why: 'This browser cannot record (no AudioWorklet).' }; }
+  const ctx = H.ctx, sr = ctx.sampleRate, N = 5, gap = 0.3;
+  a.meas = true; ainWire(id);
+  await sleep(120);
+  const t0 = ctx.currentTime + 0.25, f0 = Math.round((t0 - 0.1) * sr), f1 = Math.round((t0 + N * gap + 0.25) * sr);
+  const node = new AudioWorkletNode(ctx, 'ant-cliprec', { numberOfInputs: 3, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers' });
+  const chunks = []; a.tap.connect(node, 0, 0); node.connect(CLP.z);
+  const done = new Promise(res => { node.port.onmessage = e => { const m = e.data; if (m.b) chunks.push(m); if (m.last) res(); }; });
+  node.port.postMessage({ c: 'go', s: f0, e: f1 });
+  const cf = [];
+  for (let i = 0; i < N; i++) {
+    const f = Math.round((t0 + i * gap) * sr), t = f / sr; cf.push(f);
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o.frequency.value = 2000;
+    g.gain.setValueAtTime(0, 0); g.gain.setValueAtTime(0.5, t); g.gain.setValueAtTime(0, t + 0.004);
+    o.connect(g); g.connect(M.ping); o.start(t - 0.01); o.stop(t + 0.02);
+  }
+  await Promise.race([done, sleep((N * gap + 1.5) * 1000)]);
+  try { a.tap.disconnect(node); node.disconnect(); } catch (e) {}
+  a.meas = false; if (AIN[id] === a) ainWire(id);
+  const n = f1 - f0, B = 16384, x = new Float32Array(n); let w = 0;
+  for (const m of chunks) { const k = Math.min(m.w, n - w); if (k <= 0) break; for (let i = 0; i < k; i++) x[w + i] = Math.max(Math.abs(m.b[i]), Math.abs(m.b[B + i])); w += k; }
+  let floor = 0; for (let i = 0; i < Math.round(0.09 * sr) && i < w; i++) if (x[i] > floor) floor = x[i];
+  const hits = [];
+  for (const f of cf) {
+    const s = f - f0, e = Math.min(w, s + Math.round((gap - 0.02) * sr)); let pk = 0;
+    for (let i = s; i < e; i++) if (x[i] > pk) pk = x[i];
+    if (pk < Math.max(0.004, floor * 4)) continue;
+    const th = pk * 0.3; for (let i = s; i < e; i++) if (x[i] >= th) { hits.push(i - s); break; }
+  }
+  hits.sort((p, q) => p - q);
+  const med = hits[hits.length >> 1], near = hits.filter(h => Math.abs(h - med) <= sr * 0.003);
+  if (hits.length < 3 || near.length < 3) return { ok: false, why: 'The clicks did not come back clearly. Put the microphone near the speaker and turn the Output up, or run a cable from an output to this input.' };
+  const ms = Math.round(near.reduce((p, q) => p + q, 0) / near.length / sr * 10000) / 10;
+  c.rt = ms; c.trim = 0; save(); render();
+  return { ok: true, ms };
+}
+/* An audio file onto a track's tape. fit: 0 = Auto (a file within 3% of 1, 2, 4 … 64 bars at the rack's tempo is a loop of
+   that many bars; anything else plays as recorded and is padded with silence to the next bar), −1 = as recorded,
+   or a number of bars the whole file is fitted to. Fitting is tape style: the pitch moves with the speed.
+   It lands on the bar at linear position `lin` (16ths from the song's first bar; default = the start section). */
+async function clipImport(id, file, fit, lin) {
+  const d = D[id]; if (!d || !d.aud || !d.loaded || !file) return false;
+  const ctx = ensureCtx(), A = ensureArr(), c = st.ain[id];
+  if (fit == null) fit = c.fit;
+  if (!A.secs.length) { toast('The song has no sections yet. Add one in the Arranger first.'); return false; }
+  if (!CLP.loaded) { toast('The tape is still loading. Try again in a moment.'); return false; }
+  if (A.clips.length >= 512) { toast('A song holds up to 512 clips.'); return false; }
+  let buf; try { buf = await ctx.decodeAudioData(await file.arrayBuffer()); } catch (e) { toast('“' + file.name + '” is not audio this browser can read. WAV, MP3, AAC / M4A, FLAC and OGG usually are.'); return false; }
+  const sr = buf.sampleRate, n = buf.length, bar = 240 / H.bpm * sr, bars = n / bar;
+  if (n < 256) { toast('That file is empty.'); return false; }
+  if (n / sr > 600) { toast('That file is ' + mmss(n / sr) + ' long. A clip holds up to 10 minutes.'); return false; }
+  let lb, N = n, how = '';
+  if (fit > 0) { lb = fit; how = 'fitted to ' + plural(lb, 'bar'); }
+  else {
+    const loop = fit === 0 ? [1, 2, 4, 8, 16, 32, 64].find(b => Math.abs(bars / b - 1) < 0.03) : 0;
+    if (loop) { lb = loop; how = Math.abs(bars / loop - 1) > 0.0005 ? 'a ' + loop + '-bar loop, fitted to ' + H.bpm.toFixed(1).replace(/\.0$/, '') + ' BPM' : 'a ' + loop + '-bar loop'; }
+    else { lb = Math.min(256, Math.max(1, Math.ceil(bars - 1e-4))); N = Math.round(lb * bar); how = 'as recorded, ' + plural(lb, 'bar'); }
+  }
+  const ch = [new Float32Array(N), new Float32Array(N)], k = Math.min(n, N);
+  ch[0].set(buf.getChannelData(0).subarray(0, k)); ch[1].set(buf.getChannelData(buf.numberOfChannels > 1 ? 1 : 0).subarray(0, k));
+  const fo = Math.min(k >> 1, Math.round(sr * 0.002)), fi = Math.round(sr * 0.001), hot = Math.abs(ch[0][0]) > 0.003 || Math.abs(ch[1][0]) > 0.003;
+  for (const x of ch) { for (let i = 0; i < fo; i++) x[k - 1 - i] *= i / fo; if (hot) for (let i = 0; i < fi; i++) x[i] *= i / fi; }
+  const pk = new Float32Array(240); for (let i = 0; i < N; i++) { const b = Math.floor(i / N * 240), v = Math.max(Math.abs(ch[0][i]), Math.abs(ch[1][i])); if (v > pk[b]) pk[b] = v; }
+  const au = { id: secId(), n: N, sr, len: lb * 16, bpm: Math.round(H.bpm * 10) / 10, m: ch, rv: null, dl: null, pk, name: String(file.name || '').slice(0, 80) };
+  clipBuf(au);
+  snap();
+  const L = secL(), total = L[L.length - 1];
+  if (lin == null || !isFinite(lin)) lin = L[clamp(A.sel | 0, 0, A.secs.length - 1)];
+  lin = clamp(Math.round(lin / 16) * 16, 0, Math.max(0, total - 16));
+  CLP.A.set(au.id, au);
+  clipPut(au).then(ok => { if (!ok) toast('This browser would not store the clip: it lasts until the page reloads.'); });
+  clipCarve(id, lin, lin + au.len, null, L);
+  const cl = Object.assign({ id: secId(), m: id, len: au.len, off: 0, a: au.id }, linAnchor(lin, L));
+  A.clips.push(cl); CLP.sel = cl.id;
+  toast(d.name + ': “' + (file.name || 'file') + '” on tape from bar ' + (lin / 16 + 1) + ', ' + how + '.' + (lin + au.len > total ? ' It is longer than the song from there: add sections to hear the rest.' : '') + (A.on ? '' : ' Clips play in Song mode.'));
+  clipDone();
+  return true;
+}
+// what an audio track's panel sees and does
+H.audio = id => {
+  const d = D[id], c = st.ain[id]; if (!d || !c) return null;
+  return {
+    cfg: () => Object.assign({}, c, { cin: st.cin }),
+    state() {
+      const a = AIN[id], open = !!(a && a.tap);
+      if (open) a.pk = ainPk(a);
+      const R = CLP.rec, rc = !!(R && R.ms.has(id));
+      return { can: micCan(), open, busy: !!(a && a.busy), label: open ? a.label : '', chs: open ? a.chs : 0, err: a && a.err && !open ? ainWhy(id) : (micCan() ? '' : ainWhy(id)), pk: open ? a.pk : 0,
+        lat: Math.round(ainLat(id) * 10000) / 10, est: Math.round(ainEst(id) * 10000) / 10, measured: c.rt != null, measuring: !!(a && a.meas),
+        armed: CLP.arm.has(id), rec: rc ? R.state : '', recOn: !!R, playing: H.playing, song: arrOn(), counting: !!M.cin,
+        clips: clipsOf().filter(x => x.m === id).length, bpm: H.bpm, wired: onAir(id) };
+    },
+    open: dev => ainOpen(id, dev == null ? undefined : dev),
+    close: () => ainClose(id, false),
+    async devices() { try { return (await navigator.mediaDevices.enumerateDevices()).filter(x => x.kind === 'audioinput').map(x => ({ id: x.deviceId, label: x.label })); } catch (e) { return []; } },
+    set(k, v) {
+      if (k === 'mode' && ['st', 'l', 'r'].includes(v)) c.mode = v;
+      else if (k === 'gain') c.gain = clamp(+v || 0, -24, 24);
+      else if (k === 'mon') c.mon = !!v;
+      else if (k === 'trim') c.trim = clamp(Math.round(+v || 0), -100, 100);
+      else if (k === 'rt') c.rt = v == null ? null : clamp(+v || 0, 0, 1000);
+      else if (k === 'fit' && [0, -1, 1, 2, 4, 8, 16].includes(v)) c.fit = v;
+      else if (k === 'cin' && [0, 1, 2].includes(v)) st.cin = v;
+      else return;
+      save(); ainWire(id); render();
+    },
+    measure: () => ainMeasure(id),
+    arm: () => armToggle(d),
+    rec: () => { if (!CLP.rec && !CLP.arm.has(id)) armToggle(d); return clipRecButton(); },
+    songOn: () => { ensureArr(); if (!arrOn()) setSong(true); },
+    arranger: () => openArr(),
+    load: (file, fit) => clipImport(id, file, fit),
+  };
+};
+
 /* ---------- tape: clips on the song timeline ----------
    A clip is a bar-exact recording of one machine, taken where the machine enters its channel (after the latency
    line-up, before the fader), so on the way back it runs through the same fader, pan, mute, Duck, EQ and sends.
@@ -5517,7 +5829,7 @@ function clipStart(sg, now) {
   }
   return { srcs, stopT: 0, seen: CLP.tick, m: c.m };
 }
-function gateSet(d, fn) { for (const n of [d.ch.in, d.ch.iRv, d.ch.iDl]) try { fn(n.gain); } catch (e) {} }
+function gateSet(d, fn) { for (const n of [d.ch.in, d.ch.iRv, d.ch.iDl, d.ch.dIn]) if (n) try { fn(n.gain); } catch (e) {} }
 function clipTick(now) {
   if (!st.arr || !(clipsOf().length || CLP.on.size || CLP.rec)) return;
   const lat = M.lat || 0, hz = now + CLEAD, segs = clipSegs();
@@ -5595,6 +5907,7 @@ async function clipRecButton() {
   const A = ensureArr(), tr = armedTracks();
   if (!tr.length) { toast('Arm a track first: the dot beside a machine’s name.'); return; }
   if (!arrOn()) { toast('Clips are recorded into the song. Turn Song mode on first.'); return; }
+  for (const d of tr) if (d.aud && !(AIN[d.id] && AIN[d.id].tap) && !(await ainOpen(d.id))) { toast(d.name + ' has no input: ' + ainWhy(d.id)); return; }
   try { await clipRecMod(); } catch (e) { toast('This browser cannot record clips (no AudioWorklet).'); return; }
   if (CLP.rec) return;
   const ms = new Set(tr.map(d => d.id));
@@ -5612,23 +5925,32 @@ function clipRecBegin(p0) {
   Object.assign(R, { state: 'rec', p0, endP: A.clen ? p0 + A.clen * 16 : null, sr, bpm: Math.round(H.map.segP(p0).bpm * 10) / 10,
     s: inP ? SONG.pend.id : SONG.id, at: Math.round(p0 - (inP ? SONG.pend.p : SONG.p0)), sF: Math.round(H.map.timeAt(p0) * sr) + M.latF, eF: null, tracks: [], left: 0 });
   if (R.endP != null) R.eF = Math.round(H.map.timeAt(R.endP) * sr) + M.latF;
+  const noIn = [];
   for (const d of tr) {
     wake(d);
+    // An audio track is recorded at its input, before the monitor switch. What you play to the bar you hear reaches the rack
+    // one round trip late (out through the converter and the air, back in through the input), so its recording starts and
+    // ends that much later: sample 0 of the clip is what you played on the bar line.
+    const ai = d.aud ? AIN[d.id] : null;
+    if (d.aud && !(ai && ai.tap)) { noIn.push(d.name); continue; }
+    const off = d.aud ? ainOffF(d.id) : 0;
     const node = new AudioWorkletNode(ctx, 'ant-cliprec', { numberOfInputs: 3, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers' });
-    const t = { d, node, chunks: [], taps: [d.ch.comp, d.ch.iRvP, d.ch.iDl] };
+    const t = { d, node, chunks: [], off, taps: d.aud ? [ai.tap] : [d.ch.comp, d.ch.iRvP, d.ch.iDl] };
     t.taps.forEach((n, i) => n.connect(node, 0, i));
     node.connect(CLP.z);
     node.port.onmessage = e => { const m = e.data; if (m.b) t.chunks.push(m); if (m.last) clipRecTrack(R, t); };
-    node.port.postMessage({ c: 'go', s: R.sF, e: R.eF });
+    node.port.postMessage({ c: 'go', s: R.sF + off, e: R.eF != null ? R.eF + off : null });
     R.tracks.push(t); R.left++;
   }
+  if (noIn.length) toast(noIn.join(', ') + (noIn.length > 1 ? ' have' : ' has') + ' no input open: not recorded. Open the track and turn its input on.');
+  if (!R.tracks.length) { CLP.rec = null; arrDirty = true; render(); return; }
   clipResync();   // a track that the tape had covered comes back live for the recording
   arrDirty = true; render();
 }
 function clipRecEnd(p1) {
   const R = CLP.rec; if (!R || R.state !== 'rec') return;
   R.endP = p1; R.eF = Math.round(H.map.timeAt(p1) * R.sr) + M.latF;
-  for (const t of R.tracks) t.node.port.postMessage({ c: 'end', e: R.eF });
+  for (const t of R.tracks) t.node.port.postMessage({ c: 'end', e: R.eF + (t.off || 0) });
   render();
 }
 // Stop: keep the whole bars that were played
@@ -5733,17 +6055,31 @@ function clipWave(c, au, w) {
 }
 function armBtn(d) {
   const b = el('button', { class: 'armb', type: 'button', 'aria-pressed': String(CLP.arm.has(d.id)), 'aria-label': 'Arm ' + d.name + ' for clip recording', title: 'Arm ' + d.name + ': Rec clip records it onto its tape' });
-  b.onclick = () => { if (CLP.rec && CLP.rec.state === 'rec') { toast('Recording: finish the clip first.'); return; } if (CLP.arm.has(d.id)) CLP.arm.delete(d.id); else CLP.arm.add(d.id); if (CLP.rec) CLP.rec.ms = new Set(armedTracks().map(x => x.id)); if (CLP.rec && !CLP.rec.ms.size) CLP.rec = null; arrDirty = true; render(); };
+  b.onclick = () => armToggle(d);
   return b;
 }
-function buildTape(d, L) {
+function armToggle(d) {
+  if (CLP.rec && CLP.rec.state === 'rec') { toast('Recording: finish the clip first.'); return; }
+  if (CLP.arm.has(d.id)) CLP.arm.delete(d.id);
+  else { CLP.arm.add(d.id); if (d.aud && !(AIN[d.id] && AIN[d.id].tap)) ainOpen(d.id).then(ok => { if (!ok) toast(d.name + ' is armed, but its input is not open: ' + ainWhy(d.id)); }); }
+  if (CLP.rec) CLP.rec.ms = new Set(armedTracks().map(x => x.id)); if (CLP.rec && !CLP.rec.ms.size) CLP.rec = null;
+  arrDirty = true; render();
+}
+function buildTape(d, L, own) {
   const A = st.arr, n = A.secs.length, cl = A.clips.filter(c => c.m === d.id), armed = CLP.arm.has(d.id), rc = recHas(d.id);
-  if (!n || (!cl.length && !armed && !rc)) return;
-  TL.append(el('div', { class: 'rh tph' }, el('span', null, cl.length ? plural(cl.length, 'clip') : 'Tape')));
-  const tp = el('div', { class: 'tp', style: 'grid-column:2/span ' + n });
+  if (!n || (!own && !cl.length && !armed && !rc)) return;
+  if (!own) TL.append(el('div', { class: 'rh tph' }, el('span', null, cl.length ? plural(cl.length, 'clip') : 'Tape')));
+  const tp = el('div', { class: 'tp' + (own ? ' own' : ''), style: 'grid-column:2/span ' + n });
   tp._m = d.id;
   A.secs.forEach((s, k) => tp.append(el('i', { class: 'sb', style: 'left:' + (AX.x[k] + AX.w[k] - NAMEW - 1) + 'px' })));
-  if (!cl.length) tp.append(el('span', { class: 'hint' }, CLP.loaded ? 'Armed. Rec clip, then Play: what ' + d.name + ' plays lands here, on the bar.' : 'Loading the tape…'));
+  if (!cl.length) tp.append(el('span', { class: 'hint' }, !CLP.loaded ? 'Loading the tape…' : !d.aud ? 'Armed. Rec clip, then Play: what ' + d.name + ' plays lands here, on the bar.'
+    : armed ? 'Armed. Rec clip, then Play: what comes in lands here, on the bar.' : 'Arm it (the dot) and Rec clip to record its input, or drop an audio file here.'));
+  if (d.aud) {   // an audio file dropped on the tape lands where it is dropped, on the bar
+    tp.ondragover = e => { e.preventDefault(); tp.classList.add('drop'); };
+    tp.ondragleave = () => tp.classList.remove('drop');
+    tp.ondrop = e => { e.preventDefault(); tp.classList.remove('drop'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (!f) return;
+      const r = TL.getBoundingClientRect(), LL = secL(); clipImport(d.id, f, undefined, Math.floor(linOfX(e.clientX - r.left, LL) / 16) * 16); };
+  }
   tp.onclick = e => { if (e.target === tp && CLP.sel) { CLP.sel = null; arrDirty = true; render(); } };
   for (const c of cl) {
     const au = CLP.A.get(c.a), lin = clipLin(c, L); if (lin < 0) continue;
@@ -5923,6 +6259,10 @@ function buildSong(rows) {
   const LL = secL(); AX.tapes = [];
   TL.style.setProperty('--namew', NAMEW + 'px');
   for (const d of rows) {
+    if (d.aud) {   // an audio track has no patterns: its row is its tape
+      const ai = AIN[d.id], rh = el('div', { class: 'rh hasarm audh' }, el('b', null, d.name), el('span', null, ai && ai.tap ? ai.label || 'Input on' : 'Input off'));
+      rh.append(armBtn(d)); TL.append(rh); buildTape(d, LL, true); continue;
+    }
     const inf = patInfo(d), ok = !!d.c.sync;
     const rh = rowHead(d, inf, ok); rh.classList.add('hasarm'); rh.append(armBtn(d));
     TL.append(rh);
@@ -5957,6 +6297,7 @@ function buildScenes(rows) {
   add.onclick = () => { snap(); newScene(); arrChanged(); };
   TL.append(add);
   for (const d of rows) {
+    if (d.aud) continue;   // audio tracks live on the song's timeline, not in scenes
     const inf = patInfo(d), ok = !!d.c.sync;
     TL.append(rowHead(d, inf, ok));
     A.scenes.forEach((sc, j) => {
@@ -6529,6 +6870,11 @@ function luChip(t) {
 function stripState(d) {
   const a = d.adapter;
   if (!a) return { label: '—', st: 'off', text: 'Loading…', led: '' };
+  if (d.aud) {
+    const ai = AIN[d.id], open = !!(ai && ai.tap), armed = CLP.arm.has(d.id), rc = recHas(d.id) && CLP.rec.state === 'rec', n = clipsOf().filter(c => c.m === d.id).length;
+    return { label: rc ? 'Recording' : armed ? 'Armed' : 'Arm', st: rc ? 'playing' : armed ? 'armed' : 'off', led: rc || (open && (ai.pk = ainPk(ai)) > 0.02) ? 'on' : '',
+      text: (open ? 'In: ' + (ai.label || 'on') + (st.ain[d.id].mon ? ' · monitor' : '') : 'Input off') + (n ? ' · ' + plural(n, 'clip') : '') };
+  }
   if (d.vOff && d.vOff()) return { label: 'Powered off', st: 'off', text: 'Switched off on the machine', led: '' };
   let playing = false; try { playing = !!a.playing(); } catch (e) {}
   const zz = d.asleep ? ' · resting' : '';
@@ -6602,11 +6948,11 @@ function renderSlow(now) {
     const x = S[d.id]; if (!x || !d.loaded) continue;
     const s = stripState(d), air = onAir(d.id);
     txt(x.launch, s.label); dat(x.launch, 'st', s.st);
-    const dis = !d.adapter || !d.c.sync || !!(d.vOff && d.vOff()) || (!H.playing && arrOn()); if (x.launch.disabled !== dis) x.launch.disabled = dis;
+    const dis = d.aud ? !d.adapter : !d.adapter || !d.c.sync || !!(d.vOff && d.vOff()) || (!H.playing && arrOn()); if (x.launch.disabled !== dis) x.launch.disabled = dis;
     txt(x.state, air ? s.text : s.text + ' · not wired to Output'); tog(x.state, 'warn', !air && !!d.adapter);
     cls(x.led, 'led' + (s.led ? ' ' + s.led : ''));
     att(x.m, 'aria-pressed', d.c.mute); att(x.s, 'aria-pressed', d.c.solo);
-    txt(x.ck, d.c.sync ? 'Clock' : 'Own clock'); tog(x.ck, 'on', d.c.sync);
+    txt(x.ck, d.aud ? 'Tape' : d.c.sync ? 'Clock' : 'Own clock'); tog(x.ck, 'on', d.c.sync);
     txt(x.open, st.open === d.id ? 'Close' : 'Open');
     const vr = !!st.nodes.verb, vd = !!st.nodes.dub;
     if (x.rv.hidden === vr || x.dl.hidden === vd) { x.rv.hidden = !vr; x.dl.hidden = !vd; if (NODES[d.id]) NODES[d.id].h = NODES[d.id].el.offsetHeight; }
