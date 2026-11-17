@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <script src="../rack-client.js" data-dev="funtunfunefu"></script>
+<script src="../stem.js"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <title>Funtunfunefu</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -164,6 +165,14 @@ input[type=range]::-moz-range-thumb{width:10px;height:16px;background:#fff;borde
 #toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;background:#fff;border:1px solid #000;box-shadow:2px 2px 0 #000;
   padding:8px 12px;font:500 12px/1.3 var(--px);letter-spacing:.03em;max-width:calc(100vw - 32px);opacity:0;transition:opacity .15s;pointer-events:none;text-transform:uppercase}
 #toast.show{opacity:1}
+/* stem split (desktop): progress and the way out, clear of the pads */
+#split{position:fixed;left:50%;bottom:calc(58px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:59;background:#fff;border:1px solid #000;box-shadow:3px 3px 0 #000;
+  width:min(330px,calc(100vw - 32px));padding:8px 10px 10px;display:flex;flex-direction:column;gap:7px;font:500 12px/1.35 var(--px);letter-spacing:.03em}
+#split .pb{position:relative;height:10px;border:1px solid #000;overflow:hidden}
+#split .pb i{position:absolute;left:0;top:0;bottom:0;width:100%;background:#000;transform-origin:left;transform:scaleX(0);transition:transform .25s linear}
+#split .pb.wait i{width:30%;transform:none;transition:none;animation:spw 1.3s linear infinite}
+@keyframes spw{from{left:-30%}to{left:100%}}
+@media (prefers-reduced-motion:reduce){#split .pb.wait i{animation:none;left:35%}}
 #drop{position:fixed;inset:0;z-index:70;display:grid;place-items:center;background:var(--dith);background-color:#fff}
 #drop div{background:#fff;border:1px solid #000;box-shadow:3px 3px 0 #000;padding:22px 30px;font:700 22px var(--px)}
 </style>
@@ -192,6 +201,7 @@ input[type=range]::-moz-range-thumb{width:10px;height:16px;background:#fff;borde
       <div class="row">
         <button class="b" id="s-load">Load</button>
         <button class="b" id="s-chop">Chop ▾</button>
+        <button class="b" id="s-split" hidden title="Split this sample into drums, bass, vocals and the rest, on four pads. The first split downloads the model, about 172 MB, once.">Split</button>
         <button class="b" id="s-rev" aria-pressed="false">Rev</button>
         <button class="b" id="s-bpm" aria-label="Set tempo from this loop">→BPM</button>
         <span class="flex"></span>
@@ -261,6 +271,7 @@ input[type=range]::-moz-range-thumb{width:10px;height:16px;background:#fff;borde
 <input type="file" id="file" multiple accept="audio/*,.wav,.wave,.aif,.aiff,.aifc,.flac,.mp3,.m4a,.aac,.ogg,.oga,.opus,.webm" hidden>
 <div id="drop" hidden><div>Drop to load</div></div>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="split" hidden><span id="sp-t" role="status"></span><div class="pb" id="sp-b"><i></i></div><div class="row"><span class="flex"></span><button class="b" id="sp-x">Cancel</button></div></div>
 
 <script>
 "use strict";
@@ -595,7 +606,7 @@ function renderPats(){ $$('#pats button').forEach((b,k)=>{ b.setAttribute('aria-
 
 /* ================================================= UI: sample page */
 function refreshSample(){ const p=S.pads[S.sel]; smpF.forEach(f=>{ f.el.classList.toggle('dis',!p); f.show(); });
-  $('#s-rev').setAttribute('aria-pressed',String(!!p?.rev)); ['#s-chop','#s-rev','#s-bpm','#s-del'].forEach(s=>$(s).disabled=!p); drawWave(); }
+  $('#s-rev').setAttribute('aria-pressed',String(!!p?.rev)); ['#s-chop','#s-rev','#s-bpm','#s-del'].forEach(s=>$(s).disabled=!p); $('#s-split').disabled=!p||splitting; drawWave(); }
 $('#s-load').addEventListener('click',openFile);
 $('#s-rev').addEventListener('click',()=>{ const p=S.pads[S.sel]; if(!p) return; p.rev=!p.rev; drawPad(S.sel); refreshSample(); hit(S.sel); });
 $('#s-del').addEventListener('click',()=>{ const i=S.sel; if(!S.pads[i]) return; S.pads[i]=null; S.pats.forEach(pt=>pt.tr[i].fill(null)); drawPad(i); refreshSample(); renderSeq(); renderPads(); toast('Pad emptied'); });
@@ -618,6 +629,28 @@ function chop(n){ const p=S.pads[S.sel]; if(!p) return; let m;
   m.push(p.en); const N=m.length-1, start=Math.min(S.sel,16-N), base=p.name.replace(/ \d+$/,'');
   for(let k=0;k<N;k++){ S.pads[start+k]={...p,name:`${base} ${k+1}`,st:m[k],en:m[k+1]}; drawPad(start+k); }
   select(start); toast(`${N} slices → pads ${start+1}–${start+N}`); }
+/* stem split (desktop only): HTDemucs (../stem.js) takes the selected pad's sample apart, and the four stems land on four
+   pads from the selected one, like Chop does: drums, bass, vocals, the rest. Each keeps the pad's start and end, so Chop
+   Auto on the drums pad is the next move. The model is about 172 MB, downloaded once and kept by the browser. */
+let splitting=false;
+const canSplit=()=>!!(window.StemSplit&&StemSplit.desktop());
+$('#s-split').hidden=!canSplit();
+function splitBox(t,p,done){ const b=$('#sp-b'); $('#split').hidden=false; $('#sp-t').textContent=t; b.hidden=!!done; b.classList.toggle('wait',!(p>=0));
+  b.firstElementChild.style.transform=p>=0?`scaleX(${clamp(p,0,1).toFixed(3)})`:''; $('#sp-x').textContent=done?'Close':'Cancel'; }
+$('#sp-x').addEventListener('click',()=>{ if(splitting) StemSplit.cancel(); else $('#split').hidden=true; });
+async function split(){ const p=S.pads[S.sel]; if(!p||!p.buf||!canSplit()) return;
+  if(splitting||StemSplit.busy()){ toast('Already splitting'); return; }
+  const a=audio(), src=p.buf, base=p.name.replace(/ \d+$/,''), LAB=['drums','bass','vox','rest'];
+  if(src.duration>600){ toast('Too long to split'); return; }
+  splitting=true; refreshSample(); splitBox(`Splitting ${base}`,-1);
+  let out; try{ out=await StemSplit.run(src,s=>{ const d=StemSplit.describe(s); splitBox(`Splitting ${base}: ${d.txt}`,d.p); }); }
+  catch(e){ splitting=false; refreshSample(); if(e&&e.code==='cancel'){ $('#split').hidden=true; toast('Split cancelled'); } else splitBox((e&&e.message)||'Split failed.',-1,true); return; }
+  splitting=false; $('#split').hidden=true;
+  const start=Math.min(S.sel,12);
+  out.stems.forEach((s,k)=>{ const b=a.ctx.createBuffer(2,src.length,src.sampleRate); b.copyToChannel(s.L,0); b.copyToChannel(s.R,1);
+    S.pads[start+k]=mkPad(`${base} ${LAB[k]}`.slice(0,24),b,{st:p.st,en:p.en,snd:p.snd}); drawPad(start+k); });
+  select(start); renderPads(); toast(`4 stems → pads ${start+1}–${start+4}`); }
+$('#s-split').addEventListener('click',split);
 /* waveform drag */
 (function(){ const w=$('#wave'); let drag=null;
   w.addEventListener('pointerdown',e=>{ const p=S.pads[S.sel]; audio(); if(!p){ openFile(); return; } const r=w.getBoundingClientRect(), x=(e.clientX-r.left)/r.width, tol=24/r.width;

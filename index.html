@@ -1,4 +1,4 @@
-<!doctype html><html><head><script>/* Outside Claude (e.g. GitHub Pages): saving falls back to a plain browser download */(function(w){if(w.claude)return;var dl={save:function(o){return new Promise(function(ok,no){try{var d=o&&o.data,b=d instanceof Blob?d:new Blob([d],{type:(o&&o.mimeType)||'application/octet-stream'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=(o&&o.filename)||'download';a.style.display='none';(document.body||document.documentElement).appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},30000);ok()}catch(e){if(e&&!e.code)try{e.code='error'}catch(_){}no(e)}})}};try{Object.defineProperty(w,'claude',{configurable:true,value:{use:function(n){return Promise.resolve(n==='downloads'?dl:null)}}})}catch(e){}})(window);</script><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><script>try{var t=localStorage.getItem("ant.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><script>try{var t=localStorage.getItem("ant.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script></head><body>
 <title>Akoma Ntoaso</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -283,6 +283,8 @@ input[type=range]::-moz-range-thumb{width:10px;height:20px;background:var(--ink)
 .ms:hover{background:var(--faint2)}
 .ms.m[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:#fff}
 .ms.s[aria-pressed="true"]{background:var(--live);border-color:var(--live);color:#fff}
+.ms.fz[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.ms:disabled{opacity:.4;cursor:default}
 .ck{margin-left:auto;font:500 8.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mute);white-space:nowrap}
 .ck.on{color:var(--ink)}
 .seg{display:flex;flex-wrap:wrap;border:1px solid var(--ink);width:max-content;max-width:100%}
@@ -388,6 +390,9 @@ input[type=range]::-moz-range-thumb{width:10px;height:20px;background:var(--ink)
 .clip.sel .wv{fill:var(--sig-ink)}
 .clip.sel .lw{stroke:var(--sig-ink)}
 .clip.lost{background:repeating-linear-gradient(135deg,var(--faint2) 0 4px,transparent 4px 8px)}
+.clip.fz{background:transparent;border-style:dashed;cursor:default}
+.clip.fz .wv{fill:var(--ink)}
+.clip.fz.lost{background:repeating-linear-gradient(135deg,var(--faint2) 0 4px,transparent 4px 8px)}
 .clip .ge{position:absolute;right:0;top:0;bottom:0;width:8px;cursor:ew-resize}
 .recblk{position:absolute;top:4px;bottom:4px;width:0;background:var(--warn);opacity:.75;pointer-events:none}
 .cell.taped>span{color:var(--mute);font-weight:500}
@@ -598,6 +603,8 @@ input[type=range]::-moz-range-thumb{width:10px;height:20px;background:var(--ink)
       <button class="btn" id="bArr" type="button" aria-pressed="false" title="Arranger: sections of a whole track (A)">Arrange</button>
       <button class="btn" id="bMix" type="button" aria-pressed="false" title="Mixer: every channel as a console strip, the Master last, and the spectrum of what Rec takes (M)">Mixer</button>
       <button class="chip" id="cSec" type="button" hidden title="Song mode: open the Arranger"></button>
+      <button class="chip hot" id="cFz" type="button" hidden title="Freezing: the song plays once from the top and the machine is recorded. Click to cancel."></button>
+      <button class="chip hot" id="cSt" type="button" hidden title="Stem split: a file is being separated into drums, bass, vocals and the rest. Click to cancel."></button>
       <span class="chip" id="cLu" hidden title="Loudness after the Master chain (short-term, last 3 s)">— LUFS</span>
       <span class="chip" id="cAud" title="Audio engine: output delay and dropouts since Play">Audio —</span>
     </div>
@@ -647,6 +654,7 @@ input[type=range]::-moz-range-thumb{width:10px;height:20px;background:var(--ink)
 <div class="pick" id="pick" hidden role="dialog"></div>
 <div class="toast" id="toast" role="status"></div>
 
+<script src="stem.js"></script>
 <script>
 (() => {
 'use strict';
@@ -895,6 +903,12 @@ DEVS.forEach(d => { st.ch[d.id] = Object.assign({ vol: 0.45, pan: 0, mute: false
   }
   st.cin = [0, 1, 2].includes(st.cin) ? st.cin : 1;
 }
+/* Frozen machines: st.fz[machine] = { clips, sig, t }. Its clips are tape clips like the Arranger's ({ id, m, s, at, len, off, a, fz })
+   but they are kept here, outside the song's own clips and its undo history: they come and go with Freeze and Unfreeze only. */
+{
+  const f = st.fz && typeof st.fz === 'object' ? st.fz : {}; st.fz = {};
+  for (const d of DEVS) { const z = f[d.id]; if (!d.aud && z && typeof z === 'object' && Array.isArray(z.clips) && st.nodes && st.nodes[d.id]) st.fz[d.id] = { clips: z.clips.filter(c => c && c.m === d.id && c.a && c.len > 0), sig: typeof z.sig === 'string' ? z.sig : '', t: +z.t || 0 }; }
+}
 /* ---------- the Arranger's song ----------
    v2: scenes = which pattern each machine plays (pat[machine] = pattern index, -2 = on as set on the machine, missing = off);
    sections = the song in order, each playing one scene for some bars, with an optional follow action fo = { to, ch }
@@ -1046,7 +1060,7 @@ const FX = {};  // shared send effects: verb, dub
 const EQ = {};  // EQ nodes: the junction each one is, plus every channel copy of its filters
 const SAT = {}; // Saturator nodes: the junction, plus every channel copy (one worklet each)
 const DL = DEVS.map(x => D[x.id]);   // fixed order, built once: hot loops never allocate it again
-Object.defineProperty(H, '_dbg', { value: () => ({ D, M, B, DK, FX, EQ, SAT, satMsg: id => satMsg(id), insertSat: id => insertIns(id, 'sat'), satMatch, syncEqs: () => syncEqs(), insertEq: id => insertEq(id), eqPath: id => eqPath(id), eqResp: (id, i, sr) => bandResp(st.eq[id], i, sr, new Float64Array(EQN)), fOf, eqChanged: (id, slow) => eqChanged(id, slow), canWire, EQN: () => EQN, rec, st, quickDuck, play, stop, setTempo, launch, setSync, addNode, removeNode, connect, openMachine, VIEW, sendFx, applyMix, removeWire: w => removeWire(w), sendWires: () => SW, LU, Gate, kw, luMeter, matchTarget, sendMst, setInsert: v => setInsert(v), recButton, AIN, CLP, SONG, ainOpen, ainClose, ainMeasure, ainOffF, clipImport, clipRecButton, armToggle, setSong, ensureArr, ensureCtx, secL, openArr }) });
+Object.defineProperty(H, '_dbg', { value: () => ({ D, M, B, DK, FX, EQ, SAT, satMsg: id => satMsg(id), insertSat: id => insertIns(id, 'sat'), satMatch, syncEqs: () => syncEqs(), insertEq: id => insertEq(id), eqPath: id => eqPath(id), eqResp: (id, i, sr) => bandResp(st.eq[id], i, sr, new Float64Array(EQN)), fOf, eqChanged: (id, slow) => eqChanged(id, slow), canWire, EQN: () => EQN, rec, st, quickDuck, play, stop, setTempo, launch, setSync, addNode, removeNode, connect, openMachine, VIEW, sendFx, applyMix, removeWire: w => removeWire(w), sendWires: () => SW, LU, Gate, kw, luMeter, matchTarget, sendMst, setInsert: v => setInsert(v), recButton, FZ, freeze, unfreeze, refreeze, fzSig, clipRecMod, AIN, CLP, SONG, ainOpen, ainClose, ainMeasure, ainOffF, clipImport, clipRecButton, armToggle, setSong, ensureArr, ensureCtx, secL, openArr }) });
 
 H.linked = id => !!(D[id] && D[id].c.sync);
 H.outDelay = () => M.lat || 0;   // seconds every machine's sound is held back to line up with the slowest
@@ -2531,6 +2545,7 @@ async function play() {
 }
 function stop() {
   const ctx = H.ctx;
+  if (FZ.run && !FZ.run.fin) fzAbort();   // Stop during a freeze cancels it
   if (ctx && H.playing && rec.state === 'rec') {
     if (ctx.currentTime < rec.t0) recAbort();
     else recEnd(Math.max(rec.p0 + 16, Math.ceil(H.map.posAt(ctx.currentTime) / 16 - 1e-9) * 16));
@@ -2645,7 +2660,7 @@ function songBegin(p, fresh) {
 function songTick(now) {
   const A = st.arr;
   if (!A || !A.secs.length) { SONG.run = false; return; }
-  if (SONG.end) { if (now >= SONG.stopT) { SONG.run = false; stop(); } return; }
+  if (SONG.end) { if (now >= SONG.stopT && !FZ.run) { SONG.run = false; stop(); } return; }   // a freeze stops the song itself, once its recordings are in
   if (SONG.pend) {
     if (now < H.map.timeAt(SONG.pend.p)) return;
     Object.assign(SONG, { id: SONG.pend.id, p0: SONG.pend.p, bars: SONG.pend.bars, pend: null });
@@ -2658,15 +2673,16 @@ function songTick(now) {
   const tEnd = H.map.timeAt(pEnd);
   if (now < tEnd - LEAD) return;
   if (now > tEnd - 0.1) pEnd = nextBarP(LEAD);   // the section was shortened behind the music: change on the next bar instead
-  const n = A.secs.length, q = SONG.next != null ? secIx(SONG.next) : -1;
+  const fzr = !!FZ.run, loop = fzr ? 'off' : A.loop;   // a freeze plays the song once, in order: no loops, jumps or follow actions
+  const n = A.secs.length, q = !fzr && SONG.next != null ? secIx(SONG.next) : -1;
   SONG.next = null;
   let nk = -1, wrap = false;
-  const fo = gone ? null : A.secs[k].fo;   // the section's follow action: a jump (or any section) by chance
+  const fo = gone || fzr ? null : A.secs[k].fo;   // the section's follow action: a jump (or any section) by chance
   if (q >= 0) nk = q;
-  else if (A.loop === 'sec' && !gone) nk = k;
+  else if (loop === 'sec' && !gone) nk = k;
   else if (fo && Math.random() * 100 < fo.ch) nk = fo.to === '*' ? (n > 1 ? (k + 1 + Math.floor(Math.random() * (n - 1))) % n : k) : secIx(fo.to);
-  if (nk >= 0 || q >= 0 || (A.loop === 'sec' && !gone)) {}
-  else { const after = gone ? SONG.k : k + 1; if (after < n) nk = after; else if (A.loop === 'song') { nk = 0; wrap = true; } }
+  if (nk >= 0 || q >= 0 || (loop === 'sec' && !gone)) {}
+  else { const after = gone ? SONG.k : k + 1; if (after < n) nk = after; else if (loop === 'song') { nk = 0; wrap = true; } }
   const songTake = rec.song && rec.state === 'rec' && rec.endP == null;
   if (nk < 0) {
     for (const d of songMachines()) songSet(d, -1, pEnd);
@@ -3358,6 +3374,7 @@ function hostTick() {
     }
   }
   if (H.playing && SONG.run) { songTick(now); if (H.playing && SONG.run) clipTick(now); }
+  if (FZ.run) fzTick(now);
   auTick(now);
   modTick(now);
   arpTick(now);
@@ -3700,12 +3717,15 @@ function buildMachine(d) {
   const x = S[d.id] = {};
   x.launch = el('button', { class: 'btn sm launch', type: 'button' }, '—'); x.launch.onclick = () => (d.aud ? armToggle(d) : launch(d));
   if (d.aud) x.launch.title = 'Arm: Rec clip (Arranger) records what comes in onto this track’s tape';
-  x.open = el('button', { class: 'btn sm', type: 'button', title: 'Show its panel in the dock' }, 'Open'); x.open.onclick = () => (st.open === d.id ? closeDock() : openMachine(d.id));
+  x.open = el('button', { class: 'btn sm', type: 'button', title: 'Show its panel in the dock' }, 'Open'); x.open.onclick = () => (d.frozen ? fzMenu(d, x.open) : st.open === d.id ? closeDock() : openMachine(d.id));
   x.state = el('div', { class: 'state x' }, 'Loading…');
   meterEl(x);
   x.m = el('button', { class: 'ms m', type: 'button', title: 'Mute', 'aria-label': 'Mute ' + d.name }, 'M');
   x.s = el('button', { class: 'ms s', type: 'button', title: 'Solo', 'aria-label': 'Solo ' + d.name }, 'S');
   x.ck = el('span', { class: 'ck' }, '—');
+  // Freeze to audio, without a right-click: plays the song once, keeps the machine's sound as audio and unloads it. Pressed = frozen.
+  x.fz = d.aud ? null : el('button', { class: 'ms fz', type: 'button', 'aria-pressed': 'false', 'aria-label': 'Freeze ' + d.name + ' to audio' }, 'Frz');
+  if (x.fz) x.fz.onclick = () => (d.frozen ? fzMenu(d, x.fz) : freeze([d.id]));
   x.m.onclick = () => { d.c.mute = !d.c.mute; applyMix(); save(); render(); };
   x.s.onclick = () => { d.c.solo = !d.c.solo; applyMix(); save(); render(); };
   const body = el('div', { class: 'nb' },
@@ -3715,7 +3735,7 @@ function buildMachine(d) {
     fader('pan-' + d.id, 'Pan', d.c.pan, -1, 1, 0.02, panTxt, v => { d.c.pan = v; applyMix(); save(); }, 0),
     x.rv = fader('rv-' + d.id, 'Rev', d.c.rv, 0, 1, 0.01, sendTxt, v => { d.c.rv = v; applyMix(); save(); sendsChanged(); }, 0),
     x.dl = fader('dl-' + d.id, 'Dly', d.c.dl, 0, 1, 0.01, sendTxt, v => { d.c.dl = v; applyMix(); save(); sendsChanged(); }, 0),
-    el('div', { class: 'msrow x' }, x.m, x.s, x.ck));
+    el('div', { class: 'msrow x' }, x.m, x.s, x.fz, x.ck));
   x.rv.title = 'Send to the shared Reverb, after the fader' + (d.irv ? '. Its own reverb sends play into the room too.' : '.');
   x.dl.title = 'Send to the shared Dub Delay, after the fader.';
   x.rv.hidden = !st.nodes.verb; x.dl.hidden = !st.nodes.dub;
@@ -4868,7 +4888,7 @@ function removeNode(id) {
   if (ty === 'mod') { delete st.mod[id]; dropModEnv(id); toast(nameOf(id).replace(/ \d+$/, '') + ' removed. Its knobs are back where they were set.'); }
   for (const k in st.mod) if (st.mod[k].src === id) st.mod[k].src = '';
   if (SEL && SEL.node === id) SEL = null;
-  if (ty === 'machine') { unloadMachine(D[id]); toast(D[id].aud ? D[id].name + ' removed. Its clips stay in the song: add it again from + Add and they are back on its row.' : D[id].name + ' removed and unloaded. Its patterns are kept: add it again from + Add.'); }
+  if (ty === 'machine') { const wasFz = !!st.fz[id]; if (wasFz) fzDrop(id); unloadMachine(D[id]); toast(wasFz ? D[id].name + ' removed. Its frozen audio is gone; its patterns are kept and come back when you add it again.' : D[id].aud ? D[id].name + ' removed. Its clips stay in the song: add it again from + Add and they are back on its row.' : D[id].name + ' removed and unloaded. Its patterns are kept: add it again from + Add.'); }
   if (ty === 'fx') { dropFx(id); toast(id === 'verb' ? 'Reverb removed. Machines are back on their own reverbs.' : 'Dub Delay removed.'); }
   if (ty === 'bus' && B[id]) {
     const b = B[id]; delete B[id];
@@ -5072,12 +5092,20 @@ CV.addEventListener('contextmenu', e => {
     const items = [];
     if (ty === 'machine' || ty === 'fx') {
       if (ty === 'machine') items.push({ label: st.open === id ? 'Close panel' : 'Open panel', meta: 'Double-click the header', on: () => (st.open === id ? closeDock() : openMachine(id)) });
-      if (ty === 'machine' && keysFor(D[id])) {
+      if (ty === 'machine' && !D[id].aud) {
+        const dd = D[id];
+        if (dd.frozen) { items.length = 0; items.push(...fzItems(id)); }
+        else {
+          items.push({ label: 'Freeze to audio', meta: 'Plays the song once, keeps its sound, unloads it', on: () => freeze([id]) });
+          const all = fzAllIds(); if (all.length > 1) items.push({ label: 'Freeze every machine in the song', meta: plural(all.length, 'machine') + ' in one pass', on: () => freeze(all) });
+        }
+      }
+      if (ty === 'machine' && !D[id].frozen && keysFor(D[id])) {
         const dd = D[id];
         items.push(dd.c.kf !== false ? { label: 'Ignore the rack key', meta: 'Plays in its own key', on: () => { dd.c.kf = false; save(); keyRefresh(dd); render(); } }
                                      : { label: 'Follow the rack key', meta: st.key.on ? 'Plays in ' + kLabel(st.key) : 'And section keys', on: () => { dd.c.kf = true; save(); keyRefresh(dd); render(); } });
       }
-      if (ty === 'machine' && st.nodes.verb && D[id].irv) {
+      if (ty === 'machine' && st.nodes.verb && D[id].irv && !D[id].frozen) {
         const dd = D[id];
         items.push(dd.c.rvOwn ? { label: 'Play into the shared Reverb', meta: 'Its own reverb switches off', on: () => makeSend(id, 'verb') }
                               : { label: 'Use its own reverb', meta: 'Leaves the shared room', on: () => { const w = SW.find(w => w.a === id && w.b === 'verb'); if (w) unSend(w); } });
@@ -5113,7 +5141,7 @@ CV.addEventListener('contextmenu', e => {
       items.push({ label: 'Match the target', meta: 'Sets Gain from what has played', on: matchTarget });
       items.push({ label: 'Reset the meter', meta: 'Integrated and peaks start again', on: () => { luReset(); render(); } });
       items.push({ label: 'Remove', meta: 'Output goes straight to Rec', on: () => removeNode(id) });
-    } else if (ty === 'machine' || ty === 'bus' || ty === 'duck' || ty === 'fx' || isIns(ty)) items.push({ label: 'Remove', meta: ty === 'machine' ? 'Unloads it · patterns kept' : ty === 'duck' ? 'Its machines go straight on' : isIns(ty) ? 'What goes in goes straight on' : ty === 'fx' ? (id === 'verb' ? 'Machines go back to their own reverbs' : 'Its sends stop') : 'Ungroups its machines', on: () => removeNode(id) });
+    } else if (ty === 'machine' || ty === 'bus' || ty === 'duck' || ty === 'fx' || isIns(ty)) items.push({ label: 'Remove', meta: ty === 'machine' ? (st.fz[id] ? 'Its frozen audio goes · patterns kept' : 'Unloads it · patterns kept') : ty === 'duck' ? 'Its machines go straight on' : isIns(ty) ? 'What goes in goes straight on' : ty === 'fx' ? (id === 'verb' ? 'Machines go back to their own reverbs' : 'Its sends stop') : 'Ungroups its machines', on: () => removeNode(id) });
     else items.push({ text: 'Clock, Output and Rec are part of the rack.' });
     showMenu(sx, sy, NODES[id] ? nd.querySelector('.nh b').textContent : '', items);
     return;
@@ -5315,6 +5343,7 @@ function freshAsk() {
 const DH = $('#dockhead'), FRAMES = $('#frames');
 function openMachine(id) {
   const d = D[id]; if (!d || !d.loaded) return;
+  if (d.frozen) { toast(d.name + ' is frozen: its audio plays from the tape and its page is unloaded. Unfreeze it to open it.'); return; }
   st.open = id; save(); hideMenu();
   layoutDock(); wake(d); render();
   requestAnimationFrame(() => { if (!VIEW.has(id) && CVH > 60) flyTo(id); });
@@ -5323,7 +5352,7 @@ function closeDock() { if (!st.open) return; st.open = ''; save(); layoutDock();
 function layoutDock() {
   if (!WH) return;
   const isArr = st.open === ARR_ID && !!st.arr, isMix = st.open === MIX_ID;
-  const open = isArr || isMix || (!!st.open && !!D[st.open] && D[st.open].loaded);
+  const open = isArr || isMix || (!!st.open && !!D[st.open] && D[st.open].loaded && !D[st.open].frozen);
   if (!open && st.open) st.open = '';
   hidePick();
   const full = st.dockR >= 0.999;
@@ -5633,15 +5662,18 @@ async function ainMeasure(id) {
 /* An audio file onto a track's tape. fit: 0 = Auto (a file within 3% of 1, 2, 4 … 64 bars at the rack's tempo is a loop of
    that many bars; anything else plays as recorded and is padded with silence to the next bar), −1 = as recorded,
    or a number of bars the whole file is fitted to. Fitting is tape style: the pitch moves with the speed.
-   It lands on the bar at linear position `lin` (16ths from the song's first bar; default = the start section). */
-async function clipImport(id, file, fit, lin) {
-  const d = D[id]; if (!d || !d.aud || !d.loaded || !file) return false;
+   It lands on the bar at linear position `lin` (16ths from the song's first bar; default = the start section).
+   `pre` = audio that is already decoded ({ buf, name }, a stem of a split): no undo step, toast or redraw of its own,
+   the caller does those once for the set; the answer is then where it landed. */
+async function clipImport(id, file, fit, lin, pre) {
+  const d = D[id]; if (!d || !d.aud || (!d.loaded && !pre) || (!file && !pre)) return false;
+  if (pre) file = { name: pre.name };
   const ctx = ensureCtx(), A = ensureArr(), c = st.ain[id];
   if (fit == null) fit = c.fit;
   if (!A.secs.length) { toast('The song has no sections yet. Add one in the Arranger first.'); return false; }
   if (!CLP.loaded) { toast('The tape is still loading. Try again in a moment.'); return false; }
   if (A.clips.length >= 512) { toast('A song holds up to 512 clips.'); return false; }
-  let buf; try { buf = await ctx.decodeAudioData(await file.arrayBuffer()); } catch (e) { toast('“' + file.name + '” is not audio this browser can read. WAV, MP3, AAC / M4A, FLAC and OGG usually are.'); return false; }
+  let buf; if (pre) buf = pre.buf; else try { buf = await ctx.decodeAudioData(await file.arrayBuffer()); } catch (e) { toast('“' + file.name + '” is not audio this browser can read. WAV, MP3, AAC / M4A, FLAC and OGG usually are.'); return false; }
   const sr = buf.sampleRate, n = buf.length, bar = 240 / H.bpm * sr, bars = n / bar;
   if (n < 256) { toast('That file is empty.'); return false; }
   if (n / sr > 600) { toast('That file is ' + mmss(n / sr) + ' long. A clip holds up to 10 minutes.'); return false; }
@@ -5659,7 +5691,7 @@ async function clipImport(id, file, fit, lin) {
   const pk = new Float32Array(240); for (let i = 0; i < N; i++) { const b = Math.floor(i / N * 240), v = Math.max(Math.abs(ch[0][i]), Math.abs(ch[1][i])); if (v > pk[b]) pk[b] = v; }
   const au = { id: secId(), n: N, sr, len: lb * 16, bpm: Math.round(H.bpm * 10) / 10, m: ch, rv: null, dl: null, pk, name: String(file.name || '').slice(0, 80) };
   clipBuf(au);
-  snap();
+  if (!pre) snap();
   const L = secL(), total = L[L.length - 1];
   if (lin == null || !isFinite(lin)) lin = L[clamp(A.sel | 0, 0, A.secs.length - 1)];
   lin = clamp(Math.round(lin / 16) * 16, 0, Math.max(0, total - 16));
@@ -5668,10 +5700,74 @@ async function clipImport(id, file, fit, lin) {
   clipCarve(id, lin, lin + au.len, null, L);
   const cl = Object.assign({ id: secId(), m: id, len: au.len, off: 0, a: au.id }, linAnchor(lin, L));
   A.clips.push(cl); CLP.sel = cl.id;
+  if (pre) return { lin, len: au.len, how, over: lin + au.len > total };
   toast(d.name + ': “' + (file.name || 'file') + '” on tape from bar ' + (lin / 16 + 1) + ', ' + how + '.' + (lin + au.len > total ? ' It is longer than the song from there: add sections to hear the rest.' : '') + (A.on ? '' : ' Clips play in Song mode.'));
   clipDone();
   return true;
 }
+/* Stem split: one mix in, four tapes out. HTDemucs (in a worker, see stem.js) separates a file into drums, bass, vocals
+   and "other"; they land on Audio 1–4 as four clips on the same bar, fitted the same way, so each stem has a fader, EQ
+   and sends of its own. Audio tracks that are not on the canvas yet are added. One undo step takes all four back.
+   A desktop feature: the model is about 172 MB and wants a graphics card, so the button is not offered on a phone. */
+const STEM = { run: null, to: ['audio1', 'audio2', 'audio3', 'audio4'] };   // drums, bass, vocals, other: the order stem.js answers in
+const stemCan = () => !!(window.StemSplit && StemSplit.desktop());
+function stemView() {
+  const R = STEM.run, v = { can: stemCan(), on: !!R, name: '', txt: '', p: -1, at: '' };
+  if (R) { const x = R.st ? StemSplit.describe(R.st) : { txt: 'reading the file', p: -1 }; v.name = R.name; v.txt = x.txt; v.p = x.p; v.at = R.id; }
+  return v;
+}
+function stemChip() {
+  const c = $('#cSt'); if (!c) return; const R = STEM.run; c.hidden = !R;
+  if (R) { const v = stemView(); txt(c, 'Splitting ' + R.name + ' · ' + v.txt + ' · click to cancel'); }
+}
+function stemCancel() { if (!STEM.run) return false; STEM.run.gone = true; if (!StemSplit.cancel()) { STEM.run = null; stemChip(); toast('Split cancelled. Nothing changed.'); } return true; }
+async function stemSplit(id, file, fit) {
+  const d = D[id]; if (!d || !d.aud || !file) return false;
+  if (!stemCan()) { toast('Split needs a desktop browser: the model is too heavy for a phone.'); return false; }
+  if (STEM.run || StemSplit.busy()) { toast('A split is already running. The chip in the top bar cancels it.'); return false; }
+  const ctx = ensureCtx(), c = st.ain[id]; let A = ensureArr();
+  if (fit == null) fit = c.fit;
+  if (!A.secs.length) { toast('The song has no sections yet. Add one in the Arranger first.'); return false; }
+  if (!CLP.loaded) { toast('The tape is still loading. Try again in a moment.'); return false; }
+  if (A.clips.length > 508) { toast('A song holds up to 512 clips: there is no room for four more.'); return false; }
+  const nm = String(file.name || 'file').slice(0, 80), R = STEM.run = { id, name: '“' + (nm.length > 28 ? nm.slice(0, 26) + '…' : nm) + '”', st: null, gone: false };
+  const end = m => { if (STEM.run === R) STEM.run = null; stemChip(); if (m) toast(m); return false; };
+  stemChip();
+  let buf; try { buf = await ctx.decodeAudioData(await file.arrayBuffer()); } catch (e) { return end('“' + nm + '” is not audio this browser can read. WAV, MP3, AAC / M4A, FLAC and OGG usually are.'); }
+  if (R.gone) return end('Split cancelled. Nothing changed.');
+  if (buf.length < 256) return end('That file is empty.');
+  if (buf.duration > 600) return end('That file is ' + mmss(buf.duration) + ' long. A split takes up to 10 minutes of audio.');
+  const mb = (buf.length * 32 + clipBytes()) / 1048576;   // four stereo stems, beside what the tape already holds
+  if (mb > FZ_MAXMB) return end('Four stems of that file come to about ' + Math.round(buf.length * 32 / 1048576) + ' MB of tape, more than a browser tab should hold with what is on tape already. Split a shorter file.');
+  let out;
+  try { out = await StemSplit.run(buf, s => { if (STEM.run !== R) return; R.st = s; stemChip(); }); }
+  catch (e) { return end(e && e.code === 'cancel' ? 'Split cancelled. Nothing changed.' : (e && e.message) || 'Split failed.'); }
+  if (STEM.run !== R) return false;
+  // onto the tapes: the song may have changed while the model ran, so everything is read again here
+  A = ensureArr();
+  if (!A.secs.length) return end('The song has no sections any more, so the stems had nowhere to go.');
+  if (A.clips.length > 508) return end('A song holds up to 512 clips: there is no room for four more.');
+  const added = [];
+  for (const t of STEM.to) if (!st.nodes[t]) { addNode(t); if (st.nodes[t]) added.push(D[t].name); }
+  snap();
+  const sec = L => L[clamp(A.sel | 0, 0, A.secs.length - 1)];
+  let lin = sec(secL()), got = null, n = 0;
+  for (let k = 0; k < 4; k++) {
+    const s = out.stems[k], t = STEM.to[k]; if (!st.nodes[t]) continue;
+    const pre = { name: nm + ' · ' + s.name, buf: { sampleRate: buf.sampleRate, length: buf.length, numberOfChannels: 2, getChannelData: i => (i ? s.R : s.L) } };
+    const r = await clipImport(t, null, fit, lin, pre);
+    if (r) { got = r; lin = r.lin; n++; }
+  }
+  STEM.run = null; stemChip();
+  if (!n) { UND.u.pop(); toast('The stems could not be put on tape.'); return false; }
+  clipDone();
+  const took = out.secs >= 90 ? Math.round(out.secs / 60) + ' min' : Math.round(out.secs) + ' s';
+  toast(R.name + ' split in ' + took + ': drums, bass, vocals and the rest are on Audio 1 to 4 from bar ' + (got.lin / 16 + 1) + ', ' + got.how + '.'
+    + (added.length ? ' ' + added.join(', ') + ' added.' : '') + (got.over ? ' It is longer than the song from there: add sections to hear the rest.' : '') + (A.on ? '' : ' Clips play in Song mode.')
+    + (out.nocache ? ' The browser would not keep the model, so the next split downloads it again.' : ''));
+  return true;
+}
+
 // what an audio track's panel sees and does
 H.audio = id => {
   const d = D[id], c = st.ain[id]; if (!d || !c) return null;
@@ -5684,7 +5780,7 @@ H.audio = id => {
       return { can: micCan(), open, busy: !!(a && a.busy), label: open ? a.label : '', chs: open ? a.chs : 0, err: a && a.err && !open ? ainWhy(id) : (micCan() ? '' : ainWhy(id)), pk: open ? a.pk : 0,
         lat: Math.round(ainLat(id) * 10000) / 10, est: Math.round(ainEst(id) * 10000) / 10, measured: c.rt != null, measuring: !!(a && a.meas),
         armed: CLP.arm.has(id), rec: rc ? R.state : '', recOn: !!R, playing: H.playing, song: arrOn(), counting: !!M.cin,
-        clips: clipsOf().filter(x => x.m === id).length, bpm: H.bpm, wired: onAir(id) };
+        clips: clipsOf().filter(x => x.m === id).length, bpm: H.bpm, wired: onAir(id), split: stemView() };
     },
     open: dev => ainOpen(id, dev == null ? undefined : dev),
     close: () => ainClose(id, false),
@@ -5706,6 +5802,8 @@ H.audio = id => {
     songOn: () => { ensureArr(); if (!arrOn()) setSong(true); },
     arranger: () => openArr(),
     load: (file, fit) => clipImport(id, file, fit),
+    split: (file, fit) => stemSplit(id, file, fit),
+    splitCancel: () => stemCancel(),
   };
 };
 
@@ -5718,6 +5816,9 @@ H.audio = id => {
    whole section the machine is not started at all, so it rests and the audio thread only plays a buffer.
    Copies share one recording: a clip is { id, m, s, at, len, off, a } and `a` names the audio, kept in IndexedDB. */
 const CLP = { arm: new Set(), on: new Map(), gate: {}, sel: null, rec: null, A: new Map(), modP: null, z: null, tick: 0, loaded: false };
+// Freeze to audio: FZ.clips are the clips of every frozen machine (see "Freeze to audio" below); the tape plays them with the song's own
+const FZ = { run: null, clips: [] };
+const clipsAll = () => (FZ.clips.length ? clipsOf().concat(FZ.clips) : clipsOf());
 const CLEAD = 0.45, CLIP_DB = 'ant07-clips', CLIP_MAX = 64;
 const CREC_SRC = `class AntClipRec extends AudioWorkletProcessor{
   constructor(){super();this.s=-1;this.e=Infinity;this.b=null;this.w=0;this.B=16384;this.done=false;
@@ -5742,14 +5843,14 @@ function linAnchor(lin, L) { const A = st.arr; let k = A.secs.length - 1; while 
 const recHas = m => !!(CLP.rec && CLP.rec.ms.has(m));
 // merged stretches of linear time that machine m's clips cover
 function clipCov(m, L) {
-  const iv = []; for (const c of clipsOf()) if (c.m === m && CLP.A.has(c.a)) { const a = clipLin(c, L); if (a >= 0) iv.push([a, a + c.len]); }
+  const iv = []; for (const c of clipsAll()) if (c.m === m && CLP.A.has(c.a)) { const a = clipLin(c, L); if (a >= 0) iv.push([a, a + c.len]); }
   iv.sort((x, y) => x[0] - y[0]);
   const out = []; for (const v of iv) { const l = out[out.length - 1]; if (l && v[0] <= l[1]) l[1] = Math.max(l[1], v[1]); else out.push(v); }
   return out;
 }
 // the tape covers every bar of this section for machine m: the machine sits the section out and rests
 function clipFull(m, sid) {
-  if (!clipsOf().length || recHas(m)) return false;
+  if (!(clipsOf().length || FZ.clips.length) || recHas(m)) return false;
   const k = secIx(sid); if (k < 0) return false;
   const L = secL(); return clipCov(m, L).some(v => v[0] <= L[k] && v[1] >= L[k + 1]);
 }
@@ -5766,7 +5867,7 @@ const clipPut = au => clipDb(db => idbTx(db, 'a', os => os.put({ id: au.id, n: a
 async function clipBoot() {
   try {
     if (await idbHas(CLIP_DB)) await clipDb(async db => {
-      const rows = await idbAll(db, 'a'), used = new Set(clipsOf().map(c => c.a)), dead = [];
+      const rows = await idbAll(db, 'a'), used = new Set(clipsAll().map(c => c.a)), dead = [];
       for (const [k, v] of rows) {
         if (!used.has(k) || !v || !v.m || !(v.n > 0)) { dead.push(k); continue; }   // recordings no clip uses any more (undo history ends with the visit)
         try { clipBuf(v); CLP.A.set(k, v); } catch (e) { console.error(e); }
@@ -5776,6 +5877,8 @@ async function clipBoot() {
     });
   } catch (e) { console.error(e); }
   CLP.loaded = true; arrDirty = true; render();
+  // a frozen machine whose audio is not in this browser comes back as the machine
+  for (const id in st.fz) if (st.fz[id].clips.some(c => !CLP.A.has(c.a))) { const nm = D[id].name; unfreeze(id, false, true); toast(nm + ': its frozen audio is not in this browser, so the machine is loaded again.'); }
 }
 const clipBytes = () => { let n = 0; for (const au of CLP.A.values()) n += au.n * 8 * ((au.rv ? 1 : 0) + (au.dl ? 1 : 0) + 1); return n; };
 
@@ -5791,7 +5894,7 @@ function clipInsts(L) {
 }
 function clipSegs() {
   const L = secL(), insts = clipInsts(L), segs = new Map(), R = CLP.rec && CLP.rec.state !== 'armed' ? CLP.rec : null;
-  for (const c of clipsOf()) {
+  for (const c of clipsAll()) {
     const d = D[c.m], au = CLP.A.get(c.a), lin = clipLin(c, L);
     if (!d || !d.ch || !d.loaded || !st.nodes[c.m] || !au || !au.bufs || lin < 0) continue;
     if (CLP.rec && CLP.rec.state === 'armed' && CLP.rec.ms.has(c.m)) continue;
@@ -5831,7 +5934,7 @@ function clipStart(sg, now) {
 }
 function gateSet(d, fn) { for (const n of [d.ch.in, d.ch.iRv, d.ch.iDl, d.ch.dIn]) if (n) try { fn(n.gain); } catch (e) {} }
 function clipTick(now) {
-  if (!st.arr || !(clipsOf().length || CLP.on.size || CLP.rec)) return;
+  if (!st.arr || !(clipsOf().length || FZ.clips.length || CLP.on.size || CLP.rec)) return;
   const lat = M.lat || 0, hz = now + CLEAD, segs = clipSegs();
   CLP.tick++;
   const cov = {};
@@ -6000,6 +6103,231 @@ function clipRecTrack(R, t) {
   clipDone();
 }
 
+/* ---------- Freeze to audio ----------
+   Freezing a machine turns what it plays in the song into audio and unloads the machine: its page, its engine and its
+   timers are gone, and the rack only plays buffers on its channel. Fader, pan, mute, sends, Duck, EQ, Saturator, bus,
+   mod wires, lanes and its stem all carry on, because the audio enters the channel where the machine did.
+   · The freeze is one pass of the song, from the top, in order (no loops, jumps or follow actions), heard as it goes.
+     So the frozen audio is what the rack really plays: note wires into the machine, the rack key, machines plugged
+     through it and tempo lanes are all in it. It is recorded with the clip recorder, on the bar, sample-exact.
+   · One recording per stretch of sections the machine plays in, so nothing is joined inside a stretch. After the
+     stretch's last bar the recording runs on for up to four bars to catch the machine's own tail, and is cut back to
+     the first bar line after it has rung out.
+   · Where the machine already has clips of its own on its tape, those stay and nothing is recorded under them.
+   · The frozen clips live in st.fz, not in the song's clips: they cannot be edited and undo does not touch them.
+     Unfreeze loads the machine again and drops them; "keep its tape" turns them into ordinary clips instead.
+   · A frozen machine is `loaded` with no page and no adapter (what a machine looks like to the rack while it is
+     still loading), plus `frozen`. It plays in Song mode only, like every clip. */
+const FZ_TAIL = 64, FZ_AHEAD = 0.4, FZ_MAXMB = 1400;
+function fzRebuild() { FZ.clips = []; for (const id in st.fz) if (st.nodes[id]) for (const c of st.fz[id].clips) FZ.clips.push(c); }
+// what the frozen audio was made from: the sections, what the machine plays in each, their keys, its own clips and the tempo
+const fzSig = d => { const A = st.arr; return A ? JSON.stringify([A.secs.map(s => [s.id, s.bars, wantOf(s, d), effKey(s)]), A.clips.filter(c => c.m === d.id).map(c => [c.s, c.at, c.len]), Math.round(st.bpm * 10), sharedRoom(d), sharedEcho(d)]) : ''; };
+const fzStale = d => { const z = st.fz[d.id]; return !!(z && z.sig && z.sig !== fzSig(d)); };
+const fzCan = d => !!(d && !d.aud && d.loaded && !d.frozen && st.nodes[d.id]);
+const fzAllIds = () => (st.arr ? DL.filter(d => fzCan(d) && d.adapter && d.c.sync && st.arr.secs.some(s => wantOf(s, d) !== -1)).map(d => d.id) : []);
+const fzItems = id => [
+  { label: 'Unfreeze', meta: 'Loads it again · its frozen audio goes', on: () => unfreeze(id) },
+  { label: 'Unfreeze, keep its tape', meta: 'The audio stays as clips you can edit', on: () => unfreeze(id, true) },
+  { label: 'Refreeze', meta: 'Loads it, plays the song once, freezes it again', on: () => refreeze(id) }];
+// the node's own buttons open the same choices, so nothing is lost by a stray tap and touch screens need no right-click
+function fzMenu(d, btn) { const r = CV.getBoundingClientRect(), b = btn.getBoundingClientRect(); setSel({ node: d.id }); showMenu(b.left - r.left, b.bottom - r.top + 4, d.name + ' · frozen', fzItems(d.id)); }
+function fzChip(t) { const c = $('#cFz'); if (!c) return; c.hidden = !FZ.run; if (t != null) txt(c, t); }
+
+async function freeze(ids) {
+  const all = (Array.isArray(ids) ? ids : [ids]).map(id => D[id]).filter(fzCan);
+  if (!all.length) return false;
+  if (FZ.run) { toast('A freeze is already running. Stop cancels it.'); return false; }
+  const A = ensureArr();
+  if (!A.secs.length) { toast('Freeze records what a machine plays in the song. Add sections in the Arranger first.'); return false; }
+  if (!CLP.loaded) { toast('The tape is still loading. Try again in a moment.'); return false; }
+  if (rec.state !== 'idle') { toast('A take is armed or recording. Finish it or switch Rec off first.'); return false; }
+  const ctx = ensureCtx();
+  try { await clipRecMod(); } catch (e) { toast('This browser cannot record (no AudioWorklet), so it cannot freeze.'); return false; }
+  if (H.playing) { stop(); await sleep(150); }
+  if (FZ.run || H.playing) return false;
+  const L = secL(), total = L[L.length - 1], tracks = [], no = [];
+  let frames = 0;
+  for (const d of all) {
+    if (!fzCan(d)) continue;
+    if (!d.adapter) { no.push(d.name + ' is still loading'); continue; }
+    if (!d.c.sync) { no.push(d.name + ' is not on the Clock'); continue; }
+    const want = [];
+    A.secs.forEach((s, k) => { if (wantOf(s, d) === -1) return; const l = want[want.length - 1]; if (l && l[1] === L[k]) l[1] = L[k + 1]; else want.push([L[k], L[k + 1]]); });
+    if (!want.length) { no.push(d.name + ' plays in no section'); continue; }
+    // its own clips stay: only what the machine itself would play is recorded
+    const cov = clipCov(d.id, L), need = [];
+    for (const w of want) { let a = w[0]; for (const c of cov) { if (c[1] <= a || c[0] >= w[1]) continue; if (c[0] > a) need.push([a, c[0]]); a = Math.max(a, c[1]); } if (a < w[1]) need.push([a, w[1]]); }
+    const regs = need.map((n, i) => {
+      let lim = need[i + 1] ? need[i + 1][0] : total;
+      for (const c of cov) if (c[0] >= n[1]) { lim = Math.min(lim, c[0]); break; }
+      const e = Math.min(n[1] + FZ_TAIL, lim);
+      frames += (e - n[0]) / 16 * 240 / H.bpm * ctx.sampleRate;
+      return { a: n[0], b: n[1], e, state: 0 };
+    });
+    tracks.push({ d, regs });
+  }
+  if (!tracks.length) { toast('Nothing to freeze: ' + no.join('; ') + '.'); return false; }
+  const mb = frames * 8 / 1048576;
+  if (mb > FZ_MAXMB) { toast('That is about ' + Math.round(mb) + ' MB of audio, more than a browser tab should hold. Freeze fewer machines, or a shorter song.'); return false; }
+  const R = FZ.run = { tracks, sav: { on: A.on, sel: A.sel }, total, left: 0, fin: false, no, endP: 0, names: tracks.map(t => t.d.name).join(', ') };
+  for (const t of tracks) { R.left += t.regs.length; for (const g of t.regs) R.endP = Math.max(R.endP, g.e); }
+  if (!R.left) { fzFinish(R); return true; }   // the tape already covers everything it plays: nothing to record
+  A.on = true; A.sel = 0; CLP.rec = null; CLP.sel = null;
+  if (st.recLen !== 'song') { st.recPrev = st.recLen; st.recLen = 'song'; }
+  fzChip('Freezing ' + R.names + ' · starting'); arrDirty = true; render();
+  toast('Freezing ' + R.names + ': the song plays once from the top (' + mmss(R.endP / 16 * 240 / H.bpm) + '). Stop cancels.' + (no.length ? ' Left out: ' + no.join('; ') + '.' : ''));
+  // every machine in the song is loaded, awake and has run for a moment before bar 1, so none comes in late on a first Play
+  const sm = songMachines(); sm.forEach(wake);
+  await Promise.race([Promise.all(sm.map(d => (d.ready ? null : prep(d)))), sleep(4000)]);
+  sm.forEach(wake); await sleep(400);
+  if (FZ.run !== R) return false;
+  await play();
+  if (FZ.run !== R) return false;
+  if (!H.playing || !SONG.run) { fzAbort('The song did not start, so nothing was frozen.'); return false; }
+  fzTick(ctx.currentTime);
+  return true;
+}
+// on the host timer: each stretch's recorder gets its first and last frame a little before they come
+function fzTick(now) {
+  const R = FZ.run; if (!R || R.fin || !H.playing || !H.ctx) return;
+  const sr = H.ctx.sampleRate, hz = now + FZ_AHEAD, F = p => Math.round(H.map.timeAt(p) * sr) + M.latF;
+  for (const t of R.tracks) for (const g of t.regs) {
+    if (g.state === 0 && H.map.timeAt(g.a) <= hz) fzRegStart(R, t, g, F(g.a));
+    if (g.state === 1 && H.map.timeAt(g.e) <= hz) {
+      // the bar lines from the stretch's last bar to the end of the tail, in frames of the recording: where it may be cut
+      g.eF = F(g.e); g.mp = []; for (let p = g.b; p < g.e; p += 16) g.mp.push(p); g.mp.push(g.e);
+      g.marks = g.mp.map(p => F(p) - g.sF);
+      g.node.port.postMessage({ c: 'end', e: g.eF }); g.state = 2;
+    }
+  }
+  if (!FZ.run) return;
+  const bar = clamp(Math.floor(H.map.posAt(now) / 16) + 1, 1, Math.max(1, Math.ceil(R.endP / 16)));
+  fzChip('Freezing ' + R.names + ' · bar ' + bar + ' of ' + Math.ceil(R.endP / 16) + ' · tap to cancel');
+  if (now > H.map.timeAt(R.endP) + (M.lat || 0) + 4) fzAbort('The recording did not come back, so nothing was frozen. Try again.');
+}
+function fzRegStart(R, t, g, sF) {
+  const ctx = H.ctx, d = t.d;
+  Object.assign(g, { sF, state: 1, ch: { m: [], rv: [], dl: [] }, ns: [], hot: { rv: false, dl: false }, bpm: Math.round(H.map.segP(g.a).bpm * 10) / 10 });
+  if (sF < Math.round(ctx.currentTime * ctx.sampleRate) + 256) { fzAbort('The recorder could not start on the bar, so nothing was frozen. Try again.'); return; }
+  wake(d);
+  const node = g.node = new AudioWorkletNode(ctx, 'ant-cliprec', { numberOfInputs: 3, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers' });
+  g.taps = [d.ch.comp, d.ch.iRvP, d.ch.iDl];
+  g.taps.forEach((n, i) => n.connect(node, 0, i));
+  node.connect(CLP.z);
+  node.port.onmessage = e => { const m = e.data; if (m.b) fzChunk(g, m); if (m.last) fzRegDone(R, t, g); };
+  node.port.postMessage({ c: 'go', s: sF });
+}
+function fzFree(g) { if (!g.node) return; g.taps.forEach((n, i) => { try { n.disconnect(g.node, 0, i); } catch (e) {} }); try { g.node.disconnect(); } catch (e) {} g.node = null; }
+// a block from the recorder: the machine's own sound is kept; its reverb and echo sends only where they carry something
+function fzChunk(g, m) {
+  const B = 16384, n = m.w, x = m.b; if (!n || !g.ch) return;
+  const pair = k => { const a = new Float32Array(2 * n); a.set(x.subarray(k * 2 * B, k * 2 * B + n), 0); a.set(x.subarray((k * 2 + 1) * B, (k * 2 + 1) * B + n), n); return a; };
+  const loud = k => { for (const o of [k * 2 * B, (k * 2 + 1) * B]) for (let i = o, e = o + n; i < e; i++) if (x[i] > 1e-4 || x[i] < -1e-4) return true; return false; };
+  g.ns.push(n); g.ch.m.push(pair(0));
+  if (loud(1)) { g.hot.rv = true; g.ch.rv.push(pair(1)); } else g.ch.rv.push(null);
+  if (loud(2)) { g.hot.dl = true; g.ch.dl.push(pair(2)); } else g.ch.dl.push(null);
+}
+function fzRegDone(R, t, g) {
+  fzFree(g); g.state = 3;
+  if (FZ.run !== R) return;
+  const sr = H.ctx.sampleRate, N0 = Math.max(0, g.eF - g.sF);
+  const join = (list, need) => {
+    if (!need) return null;
+    const l = new Float32Array(N0), r = new Float32Array(N0); let w = 0;
+    list.forEach((c, i) => { const n = Math.min(g.ns[i], N0 - w); if (n <= 0) return; if (c) { l.set(c.subarray(0, n), w); r.set(c.subarray(g.ns[i], g.ns[i] + n), w); } w += n; });
+    return [l, r];
+  };
+  let prs = { m: join(g.ch.m, true), rv: join(g.ch.rv, g.hot.rv), dl: join(g.ch.dl, g.hot.dl) };
+  g.ch = null; g.ns = null;
+  // the tail: whole bars after the stretch's last bar, until the machine has rung out
+  const runN = g.marks[0]; let last = -1;
+  for (const k in prs) if (prs[k]) for (const x of prs[k]) for (let i = N0 - 1; i > last && i >= runN; i--) if (x[i] > 1e-4 || x[i] < -1e-4) { last = i; break; }
+  let k = 0; while (k < g.marks.length - 1 && g.marks[k] <= last) k++;
+  const N = Math.min(N0, g.marks[k]), len = g.mp[k] - g.a;
+  const peak = pr => { let p = 0; for (const x of pr) for (let i = 0; i < N; i++) { const v = x[i] < 0 ? -x[i] : x[i]; if (v > p) p = v; } return p; };
+  for (const q in prs) if (prs[q]) { if (peak(prs[q]) <= 1e-4) prs[q] = q === 'm' ? prs[q] : null; else if (N < N0) prs[q] = [prs[q][0].slice(0, N), prs[q][1].slice(0, N)]; }
+  if (N < N0 && prs.m[0].length !== N) prs.m = [prs.m[0].slice(0, N), prs.m[1].slice(0, N)];
+  if (N > 256 && len > 0 && (peak(prs.m) > 1e-4 || prs.rv || prs.dl)) {
+    // ends at zero (2 ms) and, when it begins inside a sound, starts from zero (1 ms), as every clip does
+    const fo = Math.min(N >> 1, Math.round(sr * 0.002)), fi = Math.round(sr * 0.001), hot = Math.abs(prs.m[0][0]) > 0.003 || Math.abs(prs.m[1][0]) > 0.003;
+    for (const q in prs) if (prs[q]) for (const a of prs[q]) { for (let i = 0; i < fo; i++) a[N - 1 - i] *= i / fo; if (hot) for (let i = 0; i < fi; i++) a[i] *= i / fi; }
+    const pk = new Float32Array(240); for (let i = 0; i < N; i++) { const b = Math.floor(i / N * 240), v = Math.max(Math.abs(prs.m[0][i]), Math.abs(prs.m[1][i])); if (v > pk[b]) pk[b] = v; }
+    const au = { id: secId(), n: N, sr, len, bpm: g.bpm, m: prs.m, rv: prs.rv, dl: prs.dl, pk };
+    clipBuf(au); g.au = au;
+  }
+  prs = null;
+  if (--R.left <= 0) fzFinish(R);
+}
+function fzFinish(R) {
+  R.fin = true;
+  if (H.playing) stop();
+  FZ.run = null;
+  const A = st.arr, L = secL(), done = [], quiet = [];
+  let bars = 0, bytes = 0;
+  for (const t of R.tracks) {
+    const d = t.d, clips = [];
+    if (!fzCan(d)) continue;
+    for (const g of t.regs) if (g.au) {
+      const au = g.au; CLP.A.set(au.id, au);
+      // once the browser has stored it, the copy the buffers were made from is not needed any more
+      clipPut(au).then(ok => { if (!ok) toast('This browser would not store the frozen audio: it lasts until the page reloads.'); else { au.m = null; if (au.rv) au.rv = true; if (au.dl) au.dl = true; } });
+      clips.push(Object.assign({ id: secId(), m: d.id, len: au.len, off: 0, a: au.id, fz: 1 }, linAnchor(g.a, L)));
+      bars += au.len / 16; bytes += au.n * 8 * (1 + (au.rv ? 1 : 0) + (au.dl ? 1 : 0));
+    }
+    if (t.regs.length && !clips.length) { quiet.push(d.name); continue; }
+    st.fz[d.id] = { clips, sig: fzSig(d), t: Date.now() };
+    fzUnload(d);
+    done.push(d.name);
+  }
+  fzRebuild();
+  if (A) { if (!done.length) A.on = R.sav.on; A.sel = clamp(R.sav.sel, 0, Math.max(0, A.secs.length - 1)); }
+  fzChip(); save(); graphChanged();
+  toast(done.length ? done.join(', ') + (done.length > 1 ? ' are' : ' is') + ' frozen: ' + plural(Math.round(bars * 100) / 100, 'bar') + ' of audio (' + (bytes / 1048576).toFixed(1) + ' MB), and unloaded. Song mode plays it. Unfreeze brings the machine back.' + (quiet.length ? ' ' + quiet.join(', ') + ' made no sound: left as it was.' : '')
+    : quiet.join(', ') + ' made no sound in the song: nothing was frozen.');
+}
+function fzAbort(why) {
+  const R = FZ.run; if (!R) return;
+  FZ.run = null; R.fin = true;
+  for (const t of R.tracks) for (const g of t.regs) { if (g.node) { g.node.port.onmessage = null; try { g.node.port.postMessage({ c: 'abort' }); } catch (e) {} fzFree(g); } g.ch = null; g.au = null; }
+  const A = st.arr; if (A) { A.on = R.sav.on; A.sel = clamp(R.sav.sel, 0, Math.max(0, A.secs.length - 1)); }
+  if (H.playing) stop();
+  fzChip(); save(); arrDirty = true; render();
+  toast(why || 'Freeze cancelled. Nothing was changed.');
+}
+// the machine's page goes; its channel stays, and the rack sees a machine that is loaded with no adapter
+function fzUnload(d) {
+  CLP.arm.delete(d.id);
+  unloadMachine(d);
+  d.loaded = true; d.frozen = true; d.asleep = true;
+  layoutDock();
+}
+// forget a freeze. keep: its audio stays, as ordinary clips on its tape
+function fzDrop(id, keep) {
+  const z = st.fz[id]; if (!z) return;
+  delete st.fz[id]; fzRebuild();
+  if (D[id]) D[id].frozen = false;
+  if (keep && st.arr) { snap(); for (const c of z.clips) if (secIx(c.s) >= 0 && CLP.A.has(c.a) && st.arr.clips.length < 512) { const x = Object.assign({}, c); delete x.fz; st.arr.clips.push(x); } }
+  else { const ids = [...new Set(z.clips.map(c => c.a))]; for (const a of ids) CLP.A.delete(a); if (ids.length) clipDb(db => idbTx(db, 'a', os => ids.forEach(k => os.delete(k)))); }
+}
+function unfreeze(id, keep, quiet) {
+  const d = D[id]; if (!d || !st.fz[id]) return false;
+  fzDrop(id, keep);
+  d.loaded = false; loadMachine(d);
+  save(); graphChanged(); clipResync();
+  if (!quiet) toast(d.name + ' is loading again.' + (keep ? ' Its frozen audio stays on its tape as clips: it rests where they play, and deleting a clip brings it back live there.' : ' Its frozen audio is gone.') + (H.playing && SONG.run ? ' It comes in on the next section line.' : ''));
+  return true;
+}
+async function refreeze(id) {
+  const d = D[id]; if (!d || !unfreeze(id, false, true)) return false;
+  toast('Loading ' + d.name + ' to freeze it again…');
+  for (let i = 0; i < 150 && !(d.adapter && d.loaded && !d.frozen); i++) await sleep(100);
+  if (!d.adapter) { toast(d.name + ' did not load. It is unfrozen; try Freeze again.'); return false; }
+  await sleep(900);   // its saved patterns are in by now
+  return freeze([id]);
+}
+$('#cFz').onclick = () => { if (FZ.run) stop(); };
+$('#cSt').onclick = () => stemCancel();
+
 /* ----- editing clips: always on the grid ----- */
 // make room on machine m's tape between a and b (linear 16ths): clips there are trimmed, split or removed, as on a tape
 function clipCarve(m, a, b, keep, L) {
@@ -6059,6 +6387,7 @@ function armBtn(d) {
   return b;
 }
 function armToggle(d) {
+  if (d.frozen) { toast(d.name + ' is frozen. Unfreeze it to record it again.'); return; }
   if (CLP.rec && CLP.rec.state === 'rec') { toast('Recording: finish the clip first.'); return; }
   if (CLP.arm.has(d.id)) CLP.arm.delete(d.id);
   else { CLP.arm.add(d.id); if (d.aud && !(AIN[d.id] && AIN[d.id].tap)) ainOpen(d.id).then(ok => { if (!ok) toast(d.name + ' is armed, but its input is not open: ' + ainWhy(d.id)); }); }
@@ -6066,13 +6395,13 @@ function armToggle(d) {
   arrDirty = true; render();
 }
 function buildTape(d, L, own) {
-  const A = st.arr, n = A.secs.length, cl = A.clips.filter(c => c.m === d.id), armed = CLP.arm.has(d.id), rc = recHas(d.id);
-  if (!n || (!own && !cl.length && !armed && !rc)) return;
-  if (!own) TL.append(el('div', { class: 'rh tph' }, el('span', null, cl.length ? plural(cl.length, 'clip') : 'Tape')));
+  const A = st.arr, n = A.secs.length, cl = A.clips.filter(c => c.m === d.id), armed = CLP.arm.has(d.id), rc = recHas(d.id), fzc = st.fz[d.id] ? st.fz[d.id].clips : [];
+  if (!n || (!own && !cl.length && !armed && !rc && !fzc.length)) return;
+  if (!own) TL.append(el('div', { class: 'rh tph' }, el('span', null, fzc.length ? 'Frozen' + (cl.length ? ' + ' + plural(cl.length, 'clip') : '') : cl.length ? plural(cl.length, 'clip') : 'Tape')));
   const tp = el('div', { class: 'tp' + (own ? ' own' : ''), style: 'grid-column:2/span ' + n });
   tp._m = d.id;
   A.secs.forEach((s, k) => tp.append(el('i', { class: 'sb', style: 'left:' + (AX.x[k] + AX.w[k] - NAMEW - 1) + 'px' })));
-  if (!cl.length) tp.append(el('span', { class: 'hint' }, !CLP.loaded ? 'Loading the tape…' : !d.aud ? 'Armed. Rec clip, then Play: what ' + d.name + ' plays lands here, on the bar.'
+  if (!cl.length && !fzc.length) tp.append(el('span', { class: 'hint' }, !CLP.loaded ? 'Loading the tape…' : !d.aud ? 'Armed. Rec clip, then Play: what ' + d.name + ' plays lands here, on the bar.'
     : armed ? 'Armed. Rec clip, then Play: what comes in lands here, on the bar.' : 'Arm it (the dot) and Rec clip to record its input, or drop an audio file here.'));
   if (d.aud) {   // an audio file dropped on the tape lands where it is dropped, on the bar
     tp.ondragover = e => { e.preventDefault(); tp.classList.add('drop'); };
@@ -6090,6 +6419,15 @@ function buildTape(d, L, own) {
     const ge = el('i', { class: 'ge' }); b.append(ge);
     b.onclick = () => { if (b._drag) { b._drag = false; return; } CLP.sel = CLP.sel === c.id ? null : c.id; arrDirty = true; render(); };
     b.onpointerdown = e => clipDrag(e, b, c, e.target === ge);
+    tp.append(b);
+  }
+  for (const c of fzc) {   // frozen audio: drawn, not editable
+    const au = CLP.A.get(c.a), lin = clipLin(c, L); if (lin < 0) continue;
+    const x0 = xOfLin(lin, L), w = Math.max(4, xOfLin(lin + c.len, L) - x0);
+    const b = el('button', { class: 'clip fz' + (au ? '' : ' lost'), type: 'button', style: 'left:' + (x0 - NAMEW) + 'px;width:' + w + 'px', 'aria-label': d.name + ' frozen audio, ' + (Math.round(c.len / 16 * 100) / 100) + ' bars',
+      title: 'Frozen audio of ' + d.name + '. Unfreeze it (its node on the canvas) to change it, or “Unfreeze, keep its tape” to edit this as clips.' });
+    if (au) b.append(clipWave(c, au, w));
+    b.onclick = () => toast('Frozen audio of ' + d.name + '. Unfreeze it on the canvas to change it; “Unfreeze, keep its tape” turns this into clips you can edit.');
     tp.append(b);
   }
   if (rc && CLP.rec.state === 'rec') { tp._rb = el('i', { class: 'recblk' }); tp.append(tp._rb); }
@@ -6205,7 +6543,7 @@ function layoutCols() {
   TL.style.gridTemplateColumns = NAMEW + 'px ' + AX.w.map(w => w + 'px').join(' ') + (sv ? ' 64px' : '');
 }
 function rowHead(d, inf, ok) {
-  const sub = !d.adapter ? 'Loading…' : !ok ? 'Wire the Clock in' : inf && inf.n > 1 ? (inf.needUsed ? 'kept slots' : plural(inf.n, 'pattern')) : 'one sequence';
+  const sub = d.frozen ? 'Frozen · audio' : !d.adapter ? 'Loading…' : !ok ? 'Wire the Clock in' : inf && inf.n > 1 ? (inf.needUsed ? 'kept slots' : plural(inf.n, 'pattern')) : 'one sequence';
   return el('div', { class: 'rh' + (d.adapter && !ok ? ' warn' : '') }, el('b', null, d.name), el('span', null, sub));
 }
 function makeCell(d, inf, ok, sc, w, cont, where) {
@@ -6264,13 +6602,14 @@ function buildSong(rows) {
       rh.append(armBtn(d)); TL.append(rh); buildTape(d, LL, true); continue;
     }
     const inf = patInfo(d), ok = !!d.c.sync;
-    const rh = rowHead(d, inf, ok); rh.classList.add('hasarm'); rh.append(armBtn(d));
+    const rh = rowHead(d, inf, ok); if (!d.frozen) { rh.classList.add('hasarm'); rh.append(armBtn(d)); }
     TL.append(rh);
     let prev = -1;
     A.secs.forEach((s, k) => {
       const sc = scById(s.sc), w = wantOf(sc, d), tape = clipFull(d.id, s.id), cont = !tape && w !== -1 && w === prev && k > 0;
       const c = makeCell(d, inf, ok, sc, w, cont, s.name);
       if (tape) { c.classList.add('taped'); const i = c.querySelector('i') || c.appendChild(el('i')); i.textContent = 'tape'; c.title = 'The tape covers this section, so ' + d.name + ' rests here. Delete the clip to hear it live again.'; }
+      if (d.frozen) { c.disabled = true; c.title = d.name + ' is frozen: what it played here is on its tape. Unfreeze it to change this.'; }
       c._sx = k; c._tape = tape; c.onclick = () => cellPick(d, sc, c, k);
       AX.cells.push(c); TL.append(c); prev = tape ? -1 : w;
     });
@@ -6302,6 +6641,7 @@ function buildScenes(rows) {
     TL.append(rowHead(d, inf, ok));
     A.scenes.forEach((sc, j) => {
       const c = makeCell(d, inf, ok, sc, wantOf(sc, d), false, sc.name);
+      if (d.frozen) { c.disabled = true; c.title = d.name + ' is frozen. Unfreeze it to change what it plays.'; }
       c._sx = j; c.onclick = () => cellPick(d, sc, c, -1);
       AX.cells.push(c); TL.append(c);
     });
@@ -6869,6 +7209,11 @@ function luChip(t) {
 }
 function stripState(d) {
   const a = d.adapter;
+  if (d.frozen) {
+    const z = st.fz[d.id], n = z ? z.clips.reduce((x, c) => x + c.len, 0) / 16 : 0, stale = fzStale(d), song = arrOn();
+    return { label: 'Frozen', st: 'off', led: clipLive(d.id) ? 'on' : '', warn: stale || !song,
+      text: 'Frozen · ' + (n ? plural(Math.round(n * 100) / 100, 'bar') + ' of audio' : 'its tape plays') + (stale ? ' · the song changed since: Refreeze' : !song ? ' · plays in Song mode' : '') };
+  }
   if (!a) return { label: '—', st: 'off', text: 'Loading…', led: '' };
   if (d.aud) {
     const ai = AIN[d.id], open = !!(ai && ai.tap), armed = CLP.arm.has(d.id), rc = recHas(d.id) && CLP.rec.state === 'rec', n = clipsOf().filter(c => c.m === d.id).length;
@@ -6949,11 +7294,12 @@ function renderSlow(now) {
     const s = stripState(d), air = onAir(d.id);
     txt(x.launch, s.label); dat(x.launch, 'st', s.st);
     const dis = d.aud ? !d.adapter : !d.adapter || !d.c.sync || !!(d.vOff && d.vOff()) || (!H.playing && arrOn()); if (x.launch.disabled !== dis) x.launch.disabled = dis;
-    txt(x.state, air ? s.text : s.text + ' · not wired to Output'); tog(x.state, 'warn', !air && !!d.adapter);
+    txt(x.state, air ? s.text : s.text + ' · not wired to Output'); tog(x.state, 'warn', (!air && (!!d.adapter || !!d.frozen)) || !!s.warn);
     cls(x.led, 'led' + (s.led ? ' ' + s.led : ''));
     att(x.m, 'aria-pressed', d.c.mute); att(x.s, 'aria-pressed', d.c.solo);
+    if (x.fz) { att(x.fz, 'aria-pressed', !!d.frozen); const fd = !!FZ.run || (!d.frozen && !d.adapter); if (x.fz.disabled !== fd) x.fz.disabled = fd; x.fz.title = d.frozen ? 'Frozen: its audio plays from the tape and the machine is unloaded. Tap for Unfreeze and Refreeze.' : 'Freeze to audio: the song plays once, its sound is kept as audio and the machine is unloaded. Unfreeze brings it back.'; }
     txt(x.ck, d.aud ? 'Tape' : d.c.sync ? 'Clock' : 'Own clock'); tog(x.ck, 'on', d.c.sync);
-    txt(x.open, st.open === d.id ? 'Close' : 'Open');
+    txt(x.open, d.frozen ? 'Unfreeze' : st.open === d.id ? 'Close' : 'Open'); x.open.title = d.frozen ? 'Load ' + d.name + ' again: with or without keeping its frozen audio, or freeze it afresh' : 'Show its panel in the dock';
     const vr = !!st.nodes.verb, vd = !!st.nodes.dub;
     if (x.rv.hidden === vr || x.dl.hidden === vd) { x.rv.hidden = !vr; x.dl.hidden = !vd; if (NODES[d.id]) NODES[d.id].h = NODES[d.id].el.offsetHeight; }
   }
@@ -7071,8 +7417,8 @@ function renderSlow(now) {
   if (S.out) {
     for (const b of S.out.buf.children) att(b, 'aria-pressed', b._v === st.buf);
     cls(S.out.led, 'led' + (lv.out && lv.out.v > 0.02 ? ' on' : ''));
-    const live = DL.filter(d => d.loaded && onAir(d.id)).length, rest = DL.filter(d => d.loaded && d.asleep).length;
-    txt(S.out.info, H.ctx ? (H.ctx.sampleRate / 1000).toFixed(1) + ' kHz · ' + live + ' on air' + (rest ? ' · ' + rest + ' resting' : '') : 'Audio starts with Play');
+    const live = DL.filter(d => d.loaded && onAir(d.id)).length, rest = DL.filter(d => d.loaded && d.asleep && !d.frozen).length, froz = DL.filter(d => d.frozen).length;
+    txt(S.out.info, H.ctx ? (H.ctx.sampleRate / 1000).toFixed(1) + ' kHz · ' + live + ' on air' + (rest ? ' · ' + rest + ' resting' : '') + (froz ? ' · ' + froz + ' frozen' : '') : 'Audio starts with Play');
     if (now - lastPk > 250) { lastPk = now; const m = lv.out; const db = m && m.pk > 0 ? 20 * Math.log10(m.pk) : -Infinity; if (m) m.pk = 0; txt(S.out.pk, 'peak ' + (isFinite(db) ? db.toFixed(1) + ' dB' : '−∞')); }
   }
   // wires carrying sound draw in ink; quiet ones stay faint. Toggled at this slow rate, never animated.
@@ -7731,7 +8077,8 @@ new MutationObserver(scopeColors).observe(document.documentElement, { attributes
 
 // build: nodes first, then load only the machines that are on the canvas
 for (const id in st.nodes) buildNode(id);
-for (const d of DL) if (st.nodes[d.id]) { d.c.sync = hasWire('clock', d.id); loadMachine(d); }
+fzRebuild();
+for (const d of DL) if (st.nodes[d.id]) { d.c.sync = hasWire('clock', d.id); if (st.fz[d.id]) { d.loaded = true; d.frozen = true; d.asleep = true; if (H.ctx && !d.ch) makeCh(d); } else loadMachine(d); }   // a frozen machine is not loaded at all: its tape plays
 buildWires(); updatePorts();
 applyCam();
 renderTempo(); renderSlow(0);
