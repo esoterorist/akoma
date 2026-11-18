@@ -162,7 +162,7 @@ button.chip:hover{background:var(--faint2)}
 .keyrow .lbl{color:var(--live);flex:none}
 .keyrow .kt{font:600 10px/1.2 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .keyrow .kt.warn{color:var(--warn);font-weight:500}
-.meter.gr i{background:var(--sig);transform-origin:100% 0}
+.meter.gr i{background:var(--sig);transform:translateX(100%)}
 .meter.gr b{inset:0 -1px 0 0;border-left:0;border-right:2px solid var(--ink)}
 .shape{position:relative;height:38px;border:1px solid var(--faint2)}
 .shape svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
@@ -237,10 +237,10 @@ button.chip:hover{background:var(--faint2)}
 .lubig{font:700 30px/1 var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.04em;white-space:nowrap}
 .lubig small{font:500 8.5px var(--mono);letter-spacing:.12em;color:var(--mute);margin-left:5px}
 .lutop .lbl{margin-left:auto;white-space:nowrap}
-.lubar{height:10px;background:var(--faint2);position:relative;overflow:hidden;contain:strict}
+.lubar{height:10px;background:var(--faint2);position:relative;overflow:hidden;contain:strict;will-change:transform}
 .lubar .tg{position:absolute;top:0;bottom:0;z-index:1;box-shadow:inset 0 0 0 2px var(--sig);background:rgba(255,200,58,.28)}
-.lubar i{position:absolute;inset:0;background:var(--ink);opacity:.82;transform-origin:0 0;transform:scaleX(0);will-change:transform}
-.lubar b{position:absolute;inset:0 0 0 -1px;border-left:2px solid var(--live);transform:translateX(0);will-change:transform}
+.lubar i{position:absolute;inset:0;background:var(--ink);opacity:.82;transform:translateX(-100%)}
+.lubar b{position:absolute;inset:0 0 0 -1px;border-left:2px solid var(--live);transform:translateX(0)}
 .lurow{display:flex;flex-wrap:wrap;gap:3px 10px;font:500 9.5px/1.35 var(--mono);font-variant-numeric:tabular-nums;color:var(--mute);letter-spacing:.02em}
 .lurow b{color:var(--ink);font-weight:600}
 .lurow .warn,.lurow .warn b{color:var(--warn)}
@@ -263,9 +263,9 @@ button.chip:hover{background:var(--faint2)}
 .state{font:500 9px/1.35 var(--mono);letter-spacing:.05em;color:var(--mute);min-height:12px;font-variant-numeric:tabular-nums}
 .state.warn{color:var(--warn)}
 /* meters move on the compositor only: transform, never width / left */
-.meter{height:6px;background:var(--faint2);position:relative;overflow:hidden;contain:strict}
-.meter i{position:absolute;inset:0;background:var(--ink);transform-origin:0 0;transform:scaleX(0);will-change:transform}
-.meter b{position:absolute;inset:0 0 0 -1px;border-left:2px solid var(--ink);transform:translateX(0);will-change:transform}
+.meter{height:6px;background:var(--faint2);position:relative;overflow:hidden;contain:strict;will-change:transform}
+.meter i{position:absolute;inset:0;background:var(--ink);transform:translateX(-100%)}
+.meter b{position:absolute;inset:0 0 0 -1px;border-left:2px solid var(--ink);transform:translateX(0)}
 .meter.hot i{background:var(--warn)}.meter.hot b{border-color:var(--warn)}
 .fd{display:grid;grid-template-columns:36px minmax(0,1fr) 44px;align-items:center;gap:6px}
 .fd label{font:500 8.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
@@ -538,10 +538,10 @@ input[type=range]::-moz-range-thumb{width:10px;height:20px;background:var(--ink)
 .throw:disabled{opacity:.3;pointer-events:none}
 /* the fader well: meter (L R) on the left, fader with its scale on the right */
 .vfw{flex:1;min-height:90px;display:flex;gap:5px;align-items:stretch}
-.vmt{position:relative;width:13px;flex:none;display:flex;gap:1px;border:1px solid var(--faint2);background:var(--faint);contain:strict}
+.vmt{position:relative;width:13px;flex:none;display:flex;gap:1px;border:1px solid var(--faint2);background:var(--faint);contain:strict;will-change:transform}
 .vmt span{position:relative;flex:1;overflow:hidden}
-.vmt i{position:absolute;inset:0;background:var(--ink);transform-origin:50% 100%;transform:scaleY(0);will-change:transform}
-.vmt b{position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--ink);transform:translateY(0);will-change:transform}
+.vmt i{position:absolute;inset:0;background:var(--ink);transform:translateY(100%)}
+.vmt b{position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--ink);transform:translateY(0)}
 .vmt span.over i,.vmt span.over b{background:var(--warn)}
 .vmt .z{position:absolute;left:0;right:0;height:1px;background:var(--warn);z-index:1}
 .vmt .tk{position:absolute;left:0;right:0;height:1px;background:var(--faint2);z-index:1}
@@ -1291,9 +1291,8 @@ function runRaf(d, t) {
   const tt = t + d.tOff;
   for (const cb of q.values()) { try { cb(tt); } catch (e) { (d.win && d.win.reportError || console.error)(e); } }
 }
-let halfF = 0;
-function machineFrames(t) {
-  if (st.sup && (halfF ^= 1)) return;   // Super lean: the open machine draws every other frame
+function machineFrames(t, vis) {
+  if (st.sup && !vis) return;   // Super lean: the open machine draws with the rack's visuals, about every other frame
   for (const d of DL) if (d.loaded && H.visible(d.id)) { runRaf(d, t); d.rafT = t; }
 }
 setInterval(() => {
@@ -4212,7 +4211,7 @@ function drawEq(id) {
 }
 // What is playing through it, behind the curve: 20 frames a second, only while the node is on screen, nothing when silent.
 function eqFrame(id, x, now) {
-  const e = EQ[id]; if (!e || now - (x._spT || 0) < 50) return;
+  const e = EQ[id]; if (!e || now - (x._spT || 0) < 25) return;
   x._spT = now;
   const n = e.sp.frequencyBinCount; if (!x._sb || x._sb.length !== n) x._sb = new Float32Array(n);
   const B = x._sb; e.sp.getFloatFrequencyData(B);
@@ -4494,7 +4493,7 @@ function drawSat(id) {
 function satFrame(id, x, now) {
   const s = SAT[id]; if (!s) return;
   s.visT = now; if (!s.vis) satVis(id, true);
-  if (now - (x._lt || 0) < 33) return; x._lt = now;
+  if (now - (x._lt || 0) < 25) return; x._lt = now;
   drawSat(id);
   const p = clamp(satPeak(id), 0, 1), pq = Math.round(p * 400);
   const lk = pq + ':' + x._k; if (x._lk === lk) return; x._lk = lk;
@@ -7192,7 +7191,7 @@ function initScope() {
   new ResizeObserver(es => { const e = es[0], dpr = Math.min(2, devicePixelRatio || 1); const w = Math.max(1, Math.round(e.contentRect.width * dpr)), h = Math.max(1, Math.round(e.contentRect.height * dpr)); if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } SCP.w = w; SCP.h = h; SCP.d = dpr; SCP.quiet = false; }).observe(c);
 }
 function drawScope(now) {
-  if (!SCP.g || !VIEW.has('out') || WORLD._far || now - SCP.t < 33) return;
+  if (!SCP.g || !VIEW.has('out') || WORLD._far || now - SCP.t < 25) return;
   SCP.t = now;
   const g = SCP.g, W = SCP.w, Hh = SCP.h, mid = Hh / 2, C = SCP.col;
   let pk = 0;
@@ -7222,7 +7221,7 @@ function meter(k, x, dt, an) {
   m.v = Math.max(n, m.v * Math.pow(0.86, dt / 16.7));
   const t = performance.now(); if (n >= m.h || t - m.ht > 1200) { m.h = n; m.ht = t; }
   const v = Math.round(m.v * 400) / 400, h = Math.round(m.h * 400) / 400;
-  if (v !== m.sv) { m.sv = v; x.mi.style.transform = 'scaleX(' + v + ')'; }
+  if (v !== m.sv) { m.sv = v; x.mi.style.transform = 'translateX(' + ((v - 1) * 100) + '%)'; }
   if (h !== m.sh) { m.sh = h; x.mb.style.transform = 'translateX(' + (h * 100) + '%)'; }
   const hot = pk > 0.98 || (m.hot && t - m.hotT < 300); if (pk > 0.98) m.hotT = t;
   if (hot !== m.hot) { m.hot = hot; tog(x.meter, 'hot', hot); }
@@ -7234,14 +7233,14 @@ function grMeter(id, x, dt, g) {
   m.v = Math.max(g, m.v * Math.pow(0.8, dt / 16.7));
   const t = performance.now(); if (g >= m.h || t - m.ht > 1000) { m.h = g; m.ht = t; }
   const v = Math.round(m.v * 400) / 400, h = Math.round(m.h * 400) / 400;
-  if (v !== m.sv) { m.sv = v; x.gi.style.transform = 'scaleX(' + v + ')'; }
+  if (v !== m.sv) { m.sv = v; x.gi.style.transform = 'translateX(' + ((1 - v) * 100) + '%)'; }
   if (h !== m.sh) { m.sh = h; x.gb.style.transform = 'translateX(' + (-h * 100) + '%)'; }
 }
 // Loudness on screen: what the meter posted in the last few hundred ms, else silence.
 const luNow = () => { const ok = M.ins && performance.now() - LU.t < 400, g = LU.g; return { m: ok ? Gate.L(g.mE) : -Infinity, s: ok ? Gate.L(g.sE) : -Infinity }; };
 function mstFrame(x, dt) {
   const L = luNow(), v = Math.round(luX(L.m) * 400) / 400, h = Math.round(luX(L.s) * 400) / 400;
-  if (v !== x._v) { x._v = v; x.bi.style.transform = 'scaleX(' + v + ')'; }
+  if (v !== x._v) { x._v = v; x.bi.style.transform = 'translateX(' + ((v - 1) * 100) + '%)'; }
   if (h !== x._h) { x._h = h; x.bb.style.transform = 'translateX(' + (h * 100) + '%)'; }
   const t = performance.now();
   if (t - (x._tT || 0) > 100) { x._tT = t; txt(x.bigN, luNum(L.s)); txt(x.vM, luNum(L.m)); }
@@ -7616,7 +7615,7 @@ function meterFeed(V, T, dt, now) {
     m.v = Math.max(n, m.v * Math.pow(0.86, dt / 16.7));
     if (n >= m.h || now - m.ht > 1200) { m.h = n; m.ht = now; }
     const v = Math.round(m.v * 300) / 300, h = Math.round(m.h * 300) / 300;
-    if (v !== e.sv) { e.sv = v; e.i.style.transform = 'scaleY(' + v + ')'; }
+    if (v !== e.sv) { e.sv = v; e.i.style.transform = 'translateY(' + ((1 - v) * 100) + '%)'; }
     if (h !== e.sh) { e.sh = h; e.b.style.transform = 'translateY(' + ((1 - h) * 100) + '%)'; }
     const ov = m.h > 60 / 66 + 1e-4; if (ov !== e.ov) { e.ov = ov; tog(e.s, 'over', ov); }
   }
@@ -7957,7 +7956,7 @@ function specLv(fd, c, tilt) {
 }
 const spY = (db, Hh) => clamp((SP_TOP - db) / (SP_TOP - SP_BOT), 0, 1) * Hh;
 function specFrame(now, dt) {
-  if (now - MX.lastSpec < 30) return;
+  if (now - MX.lastSpec < 25) return;
   const sdt = MX.lastSpec ? now - MX.lastSpec : 30; MX.lastSpec = now;
   const cv = MX.cv; if (!cv) return;
   const W = MXSP.clientWidth, Hh = MXSP.clientHeight; if (!W || !Hh) return;
@@ -8020,9 +8019,20 @@ function specFrame(now, dt) {
 // 1–9 while the Mixer is open: mute the strip; Shift: solo it
 function mixKey(n, solo) { const s = MX.list[n]; if (!s) return; if (solo) { if (s.ty === 'machine') stripSolo(s); } else stripMute(s); }
 
+/* The rack's own visuals (meters, scopes, playheads, the Mixer and Arranger) redraw together about 30 times a second,
+   on the same frames. Any change on screen makes the browser re-sort every layer of the page, and that costs the same for
+   one moved meter as for all of them, so the frames in between stay free. The open machine still draws every frame
+   (every other one, on the rack's beat, in Super lean). */
+let visT = 0;
 function frame(t) {
   requestAnimationFrame(frame);
-  const dt = lastFrame ? Math.min(100, t - lastFrame) : 16.7; lastFrame = t;
+  const vis = t - visT >= 30;
+  if (vis) { lastFrame = visT; visT = t; visFrame(t, lastFrame ? Math.min(100, t - lastFrame) : 33.3); }
+  if (dirty || (vis && t - lastSlow > 120)) { lastSlow = t; renderSlow(t); audioHealth(t); }
+  if (takesShown !== rec.takes.length) { takesShown = rec.takes.length; renderTakes(); }
+  machineFrames(t, vis);
+}
+function visFrame(t, dt) {
   const ctx = H.ctx;
   if (ctx) {
     for (const id of VIEW) {
@@ -8051,9 +8061,6 @@ function frame(t) {
   arrFrame(t);
   laneFrame();
   if (st.open === MIX_ID) mixFrame(t, dt);
-  if (dirty || t - lastSlow > 120) { lastSlow = t; renderSlow(t); audioHealth(t); }
-  if (takesShown !== rec.takes.length) { takesShown = rec.takes.length; renderTakes(); }
-  machineFrames(t);
 }
 
 /* ---------- wiring the page ---------- */
