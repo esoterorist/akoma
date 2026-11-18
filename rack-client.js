@@ -17,8 +17,7 @@
   var me = (document.currentScript && document.currentScript.dataset.dev) || '';
   var H = null;
   try { if (window.parent !== window && window.parent.RACK_HOST) H = window.parent.RACK_HOST; } catch (e) { H = null; }
-  // Outside Claude (e.g. GitHub Pages): saving falls back to a plain browser download
-  if (!H) { (function(w){if(w.claude)return;var dl={save:function(o){return new Promise(function(ok,no){try{var d=o&&o.data,b=d instanceof Blob?d:new Blob([d],{type:(o&&o.mimeType)||'application/octet-stream'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=(o&&o.filename)||'download';a.style.display='none';(document.body||document.documentElement).appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},30000);ok()}catch(e){if(e&&!e.code)try{e.code='error'}catch(_){}no(e)}})}};try{Object.defineProperty(w,'claude',{configurable:true,value:{use:function(n){return Promise.resolve(n==='downloads'?dl:null)}}})}catch(e){}})(window); return; }
+  if (!H) return;
   var W = window;
 
   // capabilities (file downloads) live on the rack page

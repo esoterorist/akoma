@@ -613,6 +613,7 @@ input[type=range]::-moz-range-thumb{width:10px;height:20px;background:var(--ink)
       <button class="btn" id="bTheme" type="button" title="Theme: Auto follows your device, or force Light or Dark. Machines in the dock follow it too.">Theme: Auto</button>
       <button class="btn" id="bLean" type="button" aria-pressed="false" title="Lean: every machine plays into the shared Reverb only, distortion runs at 1× (no oversampling delay), closed machines redraw every 2 s, fewer stacked voices. A little less polish on hard distortion and heavy layering.">Lean</button>
       <button class="btn" id="bSup" type="button" aria-pressed="false" title="Super lean: Lean, plus whatever can be shared is. Every machine's echo plays into the shared Dub Delay, every machine's glue, limiter and clip step aside for the one Master, private halls and echoes stop computing once their tails are gone, closed machines stop drawing and the open one draws at half rate. Puts a Reverb, Dub Delay and Master on the canvas if they are missing. Glue and latency changes land at the next Stop.">Super lean</button>
+      <button class="btn" id="bLink" type="button" aria-pressed="false" title="Link: jam with someone in another browser. Both racks share one clock, and each hears the other's mix (plus camera and mic if you want). Pair with a pasted code or a QR.">Link</button>
       <button class="btn" id="bSess" type="button" title="Start fresh, save this session to a file, or open one">Session</button>
       <button class="btn" id="bAdd" type="button" title="Add a machine or bus (Tab)">+ Add</button>
       <button class="btn" id="bFit" type="button" title="Show everything (F)">Fit</button>
@@ -655,6 +656,7 @@ input[type=range]::-moz-range-thumb{width:10px;height:20px;background:var(--ink)
 <div class="toast" id="toast" role="status"></div>
 
 <script src="stem.js"></script>
+<script src="link.js" defer></script>
 <script>
 (() => {
 'use strict';
@@ -680,6 +682,10 @@ const DEVS = [
   { id: 'asaseyeduru', name: 'Asase Ye Duru', code: 'AYD—08', kind: '808 drum machine', src: 'dev/asaseyeduru.html', irv: true, ide: true, nout: true, nin: true },
   // ain: the machine has an audio In. Another machine's output dragged onto it (a plug wire) plays through it instead of going its own way
   { id: 'sesawosuban', name: 'Sesa Wo Suban', code: 'SWS—XY', kind: 'XY effects + chaos voice', src: 'dev/sesawosuban.html', nin: true, ain: true, mono: true },
+  // a pocket synth with a 4-track tape: what is plugged into its In plays through and can be recorded onto the tape
+  { id: 'matemasie', name: 'Mate Masie', code: 'MMS—01', kind: 'pocket synth + 4-track tape', src: 'dev/matemasie.html', nout: true, nin: true, ain: true },
+  // one oscillator (seven band-limited waves with a morph), sub, noise, a low-pass and a gate: drone, notes or the clock
+  { id: 'hwemudua', name: 'Hwemudua', code: 'HWD—01', kind: 'waveform generator · bass voice', src: 'dev/hwemudua.html', nin: true, mono: true },
   // aud: an audio track. No sequencer and no Clock wire: a live input (mic, line, hardware) and audio files go onto its tape in
   // Song view as clips. Its page (dev/audio.html) is only a panel; the rack owns the input (see "audio tracks" below).
   { id: 'audio1', name: 'Audio 1', code: 'IN—1', kind: 'audio track', src: 'dev/audio.html#1', aud: true },
@@ -697,6 +703,8 @@ const NIH = {
   mframadan: 'notes open the selected cloud at their pitch (60 = as written)',
   '101': 'played like its keys: plays, feeds the arp, or transposes a running sequence',
   sesawosuban: 'notes play its voice (both pulses and the noise pitch), one at a time',
+  matemasie: 'notes play its synth (poly, or mono / legato / unison as set on its Env page)',
+  hwemudua: 'notes set its pitch, one at a time (legato); in Notes mode they also open its gate. Fixed mode keeps its frequency',
 };
 const MAX_BUS = 4, MAX_DUCK = 4, MAX_EQ = 4, MAX_SAT = 4, MAX_MOD = 8, MAX_NT = 8;
 const NODE_W = { clock: 212, machine: 236, bus: 200, out: 236, rec: 264, duck: 236, fx: 236, mst: 280, eq: 280, sat: 280, mod: 248, nt: 224 };
@@ -1050,6 +1058,15 @@ const HAS_AWN = typeof AudioWorkletNode !== 'undefined';
 
 /* ---------- the host every machine talks to (see rack-client.js) ---------- */
 const H = window.RACK_HOST = { win: window, ctx: null, playing: false, bpm: st.bpm, map: new TMap(st.bpm) };
+// Link (link.js): two racks in two browsers on one clock. Until link.js loads, every hook is a no-op.
+const LNK = { want: () => false, req() {}, started() {}, stopped() {}, on: () => false, lead: () => 0, tempo() {} };
+window.AKOMA_LINK = {
+  hooks: LNK, H, el, toast, render: () => render(),
+  ctx: () => ensureCtx(), post: () => (ensureCtx(), M.post),
+  play: opt => play(opt), stop: () => stop(), tempo: (v, p) => tempoRemote(v, p),
+  pos: () => (H.ctx ? H.map.posAt(H.ctx.currentTime) : 0),
+  timeAt: p => H.map.timeAt(p), posAt: t => H.map.posAt(t),
+};
 const D = {};
 DEVS.forEach((x, i) => { D[x.id] = Object.assign({ i, loaded: false, adapter: null, win: null, proxy: null, ready: false, prepP: null, q: null, ch: null, mods: 0, modsDone: 0, lat: [], latF: 0, c: st.ch[x.id],
   raf: new Map(), rafN: 0, rafT: 0, tOff: 0, asleep: true, loudT: 0, wakeT: 0, pull: new Set(), pk: 0, fxFn: null, fxOn: null }, x); });
@@ -2507,9 +2524,12 @@ function unloadMachine(d) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const nextBarP = lead => Math.ceil(H.map.posAt(H.ctx.currentTime + lead) / 16 - 1e-9) * 16;
 
-async function play() {
+// opt (from Link): { p, t: () => ctx time } — the rack's position p sits at that time, shared with the other rack.
+// When that time is already past (joining a rack that plays, or a slow prep), machines come in on the next bar.
+async function play(opt) {
   const ctx = ensureCtx();
   if (H.playing) return;
+  if (!opt && LNK.want()) { LNK.req(); return; }   // linked: both racks start together (Link decides when)
   H.playing = true; render();
   AUD.e0 = null; AUD.last = 0; AUD.badT = 0;
   luReset();   // integrated loudness and peaks count from Play
@@ -2523,6 +2543,21 @@ async function play() {
   if (!H.playing) return;
   updateLatency(true);   // fresh figures before bar 1 (they may shrink here): compensation in place for the first hit, and the take starts on the true bar line
   let t0 = ctx.currentTime + 0.15;
+  if (opt) {
+    let ta = opt.t(); const pa = opt.p || 0;
+    if (!isFinite(ta)) ta = t0;
+    H.map.reset(pa, ta, H.bpm);
+    let ps = pa;
+    if (ta < ctx.currentTime + 0.05) ps = Math.ceil(H.map.posAt(ctx.currentTime + 0.5) / 16 - 1e-9) * 16;
+    t0 = H.map.timeAt(ps);
+    DL.forEach(relink); sendMaps();
+    if (song) { songBegin(ps, true); if (CLP.rec && CLP.rec.state === 'armed') clipRecBegin(ps); } else if (CLP.rec) CLP.rec = null;
+    else list.forEach(d => { d.q = null; try { d.adapter.start(t0, ps); } catch (e) { console.error(e); } });
+    metro.p = ps;
+    if (rec.state === 'armed') { if (M.rec) recBegin(t0, ps); else { rec.state = 'idle'; toast('The recorder could not start in this browser.'); } }
+    LNK.started();
+    render(); return;
+  }
   // Count-in: a recording of a live input that starts with Play gets one or two bars of clicks first, so you can come in on bar 1
   if (song && st.cin > 0 && CLP.rec && CLP.rec.state === 'armed' && [...CLP.rec.ms].some(id => D[id] && D[id].aud)) {
     const beat = 60 / H.bpm, n = st.cin * 4, c0 = ctx.currentTime + 0.12;
@@ -2541,9 +2576,11 @@ async function play() {
   else list.forEach(d => { d.q = null; try { d.adapter.start(t0, 0); } catch (e) { console.error(e); } });
   metro.p = 0;
   if (rec.state === 'armed') { if (M.rec) recBegin(t0, 0); else { rec.state = 'idle'; toast('The recorder could not start in this browser.'); } }
+  LNK.started();
   render();
 }
 function stop() {
+  const was = H.playing;
   const ctx = H.ctx;
   if (FZ.run && !FZ.run.fin) fzAbort();   // Stop during a freeze cancels it
   if (ctx && H.playing && rec.state === 'rec') {
@@ -2564,6 +2601,7 @@ function stop() {
   if (ctx) { H.map.reset(0, ctx.currentTime, H.bpm); DL.forEach(relink); sendMaps(); }
   setBare();   // Super lean's glue and latency changes wait for a Stop
   keyRefresh();   // stopped: every machine back on the song key (a section's own key ends with the song)
+  if (was) LNK.stopped();
   render();
 }
 function queue(d, type) {
@@ -2601,7 +2639,18 @@ function setTempo(v) {
   if (!isFinite(v) || v === H.bpm) { renderTempo(); return; }
   auTouch('tempo', v);
   st.bpm = v; save();
-  tempoApply(v);
+  // linked and playing: the change lands far enough ahead that the other rack gets it in time, on the same 16th
+  const lp = H.playing && H.ctx && LNK.on() ? Math.ceil(H.map.posAt(H.ctx.currentTime + 0.25 + LNK.lead())) : null;
+  tempoApply(v, lp);
+  LNK.tempo(v, lp);
+}
+// the other rack's tempo knob (Link): same as the knob here, but not sent back
+function tempoRemote(v, p) {
+  v = clamp(Math.round(v * 10) / 10, 40, 240);
+  if (!isFinite(v) || v === H.bpm) return;
+  st.bpm = v; save();
+  if (H.playing && H.ctx && p != null && H.map.timeAt(p) < H.ctx.currentTime + 0.02) p = Math.ceil(H.map.posAt(H.ctx.currentTime + 0.05));
+  tempoApply(v, H.playing ? p : null);
 }
 // the tempo itself: the knob (setTempo) or the Tempo lane. Lands on a 16th no machine has scheduled yet.
 function tempoApply(v, p) {
@@ -4636,7 +4685,7 @@ function connect(a, b, k) {
     if (canWire(a, b, k) && !hasWire(a, b, k)) {
       st.wires = st.wires.filter(w => !(w.a === a && (!w.k || w.k === 'plug')));
       st.wires.push({ a, b, k });
-      toast(nameOf(a) + ' now plays through ' + nameOf(b) + '. Open ' + nameOf(b) + ' and touch the pad.');
+      toast(nameOf(a) + ' now plays through ' + nameOf(b) + (b === 'matemasie' ? '. Open it, set the tape Source to In or Both and press Rec to put it on tape.' : '. Open ' + nameOf(b) + ' and touch the pad.'));
     }
     applyMix(); graphChanged(); return;
   }
@@ -5205,7 +5254,7 @@ function showAdd(sx, sy, atPoint) {
    database it shares with the standalone page). Standalone machines are never touched.
    Fresh = all of that cleared, then a reload: the default patch, and each machine opens the way it does the first
    time in the rack (blank patterns, factory sounds, nothing latched, frozen or listening). Buffer stays. */
-const SESS_LS = ['ant07.v1', 'ant06.v1', 'dwn09.rack.v1', 'akb03.rack.v1', 'hextrig.project.v1.rack', 'v101.rack', 'ans12.rack.v1', 'nky32.rack.v1', 'hwn-mx.rack.v1', 'mfr64.rack.v1', 'fwh60.rack.v1', 'ayd08.rack.v1', 'sws.rack.v1'];
+const SESS_LS = ['ant07.v1', 'ant06.v1', 'dwn09.rack.v1', 'akb03.rack.v1', 'hextrig.project.v1.rack', 'v101.rack', 'ans12.rack.v1', 'nky32.rack.v1', 'hwn-mx.rack.v1', 'mfr64.rack.v1', 'fwh60.rack.v1', 'ayd08.rack.v1', 'sws.rack.v1', 'mms01.rack.v1', 'hwd01.rack.v1'];
 const SESS_IDB = [
   { db: 'nkn-08-rack', stores: ['kv', 'smp'], whole: true },
   { db: 'mframadan', stores: ['reels'], pre: 'mfr64.rack.v1:' },
