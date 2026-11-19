@@ -685,7 +685,7 @@ const DEVS = [
   // a pocket synth with a 4-track tape: what is plugged into its In plays through and can be recorded onto the tape
   { id: 'matemasie', name: 'Mate Masie', code: 'MMS—01', kind: 'pocket synth + 4-track tape', src: 'dev/matemasie.html', nout: true, nin: true, ain: true },
   // one oscillator (seven band-limited waves with a morph), sub, noise, a low-pass and a gate: drone, notes or the clock
-  { id: 'hwemudua', name: 'Hwemudua', code: 'HWD—01', kind: 'waveform generator · bass voice', src: 'dev/hwemudua.html', nin: true, mono: true },
+  { id: 'hwemudua', name: 'Hwemudua', code: 'HWD—01', kind: 'bass voice · sequencer · dice', src: 'dev/hwemudua.html', nout: true, nin: true, mono: true },
   // aud: an audio track. No sequencer and no Clock wire: a live input (mic, line, hardware) and audio files go onto its tape in
   // Song view as clips. Its page (dev/audio.html) is only a panel; the rack owns the input (see "audio tracks" below).
   { id: 'audio1', name: 'Audio 1', code: 'IN—1', kind: 'audio track', src: 'dev/audio.html#1', aud: true },
@@ -704,7 +704,7 @@ const NIH = {
   '101': 'played like its keys: plays, feeds the arp, or transposes a running sequence',
   sesawosuban: 'notes play its voice (both pulses and the noise pitch), one at a time',
   matemasie: 'notes play its synth (poly, or mono / legato / unison as set on its Env page)',
-  hwemudua: 'notes set its pitch, one at a time (legato); in Notes mode they also open its gate. Fixed mode keeps its frequency',
+  hwemudua: 'notes set its pitch, one at a time (legato); in Notes mode they also open its gate; while its sequencer plays (Seq) they transpose it. Fixed mode keeps its frequency',
 };
 const MAX_BUS = 4, MAX_DUCK = 4, MAX_EQ = 4, MAX_SAT = 4, MAX_MOD = 8, MAX_NT = 8;
 const NODE_W = { clock: 212, machine: 236, bus: 200, out: 236, rec: 264, duck: 236, fx: 236, mst: 280, eq: 280, sat: 280, mod: 248, nt: 224 };
