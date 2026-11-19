@@ -215,6 +215,33 @@ button.chip:hover{background:var(--faint2)}
 .satk{font:500 9px/1.35 var(--mono);color:var(--mute);min-height:2.7em}
 .n-sat.byp .satv .cv{stroke-dasharray:4 3;opacity:.45}
 .n-sat.byp .satv .lit{opacity:.3}
+/* the Adinkrahene node (RE-201): the tape loop with its heads (drag: across = Repeat Rate, up / down = Intensity), the 12 modes */
+.n-ade .fd{grid-template-columns:44px minmax(0,1fr) 58px}
+.adev{position:relative;height:100px;border:1px solid var(--faint2);touch-action:none;cursor:move;contain:strict;overflow:hidden}
+.adev svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.adev .tape{fill:none;stroke:var(--mute);stroke-width:2;stroke-dasharray:2 6}
+.adev .run{stroke:var(--ink)}
+.adev .gt{font:500 7.5px var(--mono);fill:var(--mute);letter-spacing:.06em}
+.adev .ms3{font:700 11px var(--mono);fill:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.adev .hd{fill:var(--surface);stroke:var(--ink);stroke-width:1.25}
+.adev .hd.on{fill:var(--sig);stroke:var(--sig-ink)}
+.adev .hd.er{fill:var(--faint2);stroke:var(--mute)}
+.adev .lv{fill:var(--sig)}
+.adev .lv.rc{fill:var(--live)}
+.adev .spb{fill:none;stroke:var(--faint2);stroke-width:1.5;stroke-linejoin:round}
+.adev .spb.on{stroke:var(--mute)}
+.adev .spl{fill:none;stroke:var(--sig);stroke-width:3;stroke-linejoin:round;opacity:0}
+.adev .fbt{font:600 8px var(--mono);fill:var(--ink);letter-spacing:.04em}
+.adev .fbt.hot{fill:var(--warn)}
+.n-ade.byp .adev .hd.on{fill:var(--faint2)}
+.seg.m12{width:100%;display:grid;grid-template-columns:repeat(6,minmax(0,1fr))}
+.seg.m12 button{padding:0;border-bottom:1px solid var(--ink);font-variant-numeric:tabular-nums}
+.seg.m12 button:nth-child(6n){border-right:0}
+.seg.m12 button:nth-child(n+7){border-bottom:0}
+.seg.m12 button.sp{background-image:linear-gradient(var(--faint2),var(--faint2));background-size:100% 3px;background-repeat:no-repeat;background-position:bottom}
+.seg.m12 button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg.s6{width:100%;display:grid;grid-template-columns:repeat(6,minmax(0,1fr))}
+.seg.s6 button{padding:0 2px}
 .seg.full button{padding:0 2px}
 .sweep{display:grid;gap:1px}
 .swtop{display:flex;align-items:baseline;gap:8px;min-width:0}
@@ -629,7 +656,7 @@ input[type=range]::-moz-range-thumb{width:10px;height:20px;background:var(--ink)
       </div>
       <div class="hud" aria-hidden="true">
         <span><b>Drag</b> empty space to pan</span><span><b>Wheel / pinch</b> to zoom</span><span><b>Drag from a port</b> to wire</span>
-        <span class="long"><b>Double-click</b> a machine to open it</span><span class="long"><b>Right-click</b> a machine to duck, EQ or saturate it</span><span class="long"><b>Tab</b> add · <b>Del</b> remove · <b>F</b> fit · <b>M</b> mixer</span>
+        <span class="long"><b>Double-click</b> a machine to open it</span><span class="long"><b>Right-click</b> a machine to duck, EQ, saturate or echo it</span><span class="long"><b>Tab</b> add · <b>Del</b> remove · <b>F</b> fit · <b>M</b> mixer</span>
       </div>
       <div class="menu" id="menu" role="menu" hidden></div>
     </section>
@@ -686,6 +713,8 @@ const DEVS = [
   { id: 'matemasie', name: 'Mate Masie', code: 'MMS—01', kind: 'pocket synth + 4-track tape', src: 'dev/matemasie.html', nout: true, nin: true, ain: true },
   // one oscillator (seven band-limited waves with a morph), sub, noise, a low-pass and a gate: drone, notes or the clock
   { id: 'hwemudua', name: 'Hwemudua', code: 'HWD—01', kind: 'bass voice · sequencer · dice', src: 'dev/hwemudua.html', nout: true, nin: true, mono: true },
+  // two Syncussion voices (VCO, sweep, LFO, noise, filter) with a two-lane sequencer; its lanes go out as GM toms 45 / 50
+  { id: 'mmeredane', name: 'Mmere Dane', code: 'MMD—02', kind: 'Syncussion percussion synth', src: 'dev/mmeredane.html', nout: true, nin: true },
   // aud: an audio track. No sequencer and no Clock wire: a live input (mic, line, hardware) and audio files go onto its tape in
   // Song view as clips. Its page (dev/audio.html) is only a panel; the rack owns the input (see "audio tracks" below).
   { id: 'audio1', name: 'Audio 1', code: 'IN—1', kind: 'audio track', src: 'dev/audio.html#1', aud: true },
@@ -705,9 +734,10 @@ const NIH = {
   sesawosuban: 'notes play its voice (both pulses and the noise pitch), one at a time',
   matemasie: 'notes play its synth (poly, or mono / legato / unison as set on its Env page)',
   hwemudua: 'notes set its pitch, one at a time (legato); in Notes mode they also open its gate; while its sequencer plays (Seq) they transpose it. Fixed mode keeps its frequency',
+  mmeredane: 'below C4 (60) hit voice A, C4 and up hit voice B (or A / B / Both, set on its page); a voice with Key on follows the note (A from C3, B from C4)',
 };
-const MAX_BUS = 4, MAX_DUCK = 4, MAX_EQ = 4, MAX_SAT = 4, MAX_MOD = 8, MAX_NT = 8;
-const NODE_W = { clock: 212, machine: 236, bus: 200, out: 236, rec: 264, duck: 236, fx: 236, mst: 280, eq: 280, sat: 280, mod: 248, nt: 224 };
+const MAX_BUS = 4, MAX_DUCK = 4, MAX_EQ = 4, MAX_SAT = 4, MAX_ADE = 2, MAX_MOD = 8, MAX_NT = 8;
+const NODE_W = { clock: 212, machine: 236, bus: 200, out: 236, rec: 264, duck: 236, fx: 236, mst: 280, eq: 280, sat: 280, ade: 280, mod: 248, nt: 224 };
 const MST_LAT = 31;   // frames the Master chain holds the mix back (its 2× oversampling filters), at every sample rate
 // the shared send effects: one of each
 const FXS = ['verb', 'dub'], FXN = { verb: 'Reverb', dub: 'Dub Delay' };
@@ -725,6 +755,7 @@ function typeOf(id) {
   if (/^duck[1-4]$/.test(id)) return 'duck';
   if (/^eq[1-4]$/.test(id)) return 'eq';
   if (/^sat[1-4]$/.test(id)) return 'sat';
+  if (/^ade[1-2]$/.test(id)) return 'ade';
   if (/^mod[1-8]$/.test(id)) return 'mod';
   if (/^nt[1-8]$/.test(id)) return 'nt';
   if (id === 'verb' || id === 'dub') return 'fx';
@@ -734,7 +765,7 @@ const MODT = { lfo: 'LFO', rnd: 'Random', env: 'Envelope', mac: 'Macro' };
 const modName = id => { const c = st.mod && st.mod[id]; return (c ? MODT[c.t] : 'Mod') + ' ' + id.slice(3); };
 const NTT = { tr: 'Transpose', fl: 'Filter', ch: 'Chance', sc: 'Scale', cd: 'Chord', ar: 'Arp', dl: 'Echo' };
 const ntName = id => { const c = st.nt && st.nt[id]; return (c ? NTT[c.t] : 'Notes') + ' ' + id.slice(2); };
-const nameOf = id => (typeOf(id) === 'nt' ? ntName(id) : typeOf(id) === 'mod' ? modName(id) : D[id] ? D[id].name : FXN[id] || (typeOf(id) === 'bus' ? 'Bus ' + id.slice(3) : typeOf(id) === 'duck' ? 'Duck ' + id.slice(4) : typeOf(id) === 'eq' ? 'EQ ' + id.slice(2) : typeOf(id) === 'sat' ? 'Saturator ' + id.slice(3) : id === 'out' ? 'Output' : id === 'mst' ? 'Master' : id));
+const nameOf = id => (typeOf(id) === 'nt' ? ntName(id) : typeOf(id) === 'mod' ? modName(id) : D[id] ? D[id].name : FXN[id] || (typeOf(id) === 'bus' ? 'Bus ' + id.slice(3) : typeOf(id) === 'duck' ? 'Duck ' + id.slice(4) : typeOf(id) === 'eq' ? 'EQ ' + id.slice(2) : typeOf(id) === 'sat' ? 'Saturator ' + id.slice(3) : typeOf(id) === 'ade' ? 'Adinkrahene' + (id === 'ade1' ? '' : ' ' + id.slice(3)) : id === 'out' ? 'Output' : id === 'mst' ? 'Master' : id));
 // What may connect to what: Clock → machine (sync), machine → bus, Duck or Output, Duck → bus or Output, bus → Output,
 // Output → Rec, or Output → Master → Rec (the Master chain is an insert on the Output: you hear it and Rec takes it). Key wires (k: 'key') run from a machine to a Duck's Key: they listen, they carry no sound.
 // Send wires (k: 'snd') run from a machine into a shared effect (and from the Dub Delay into the Reverb). They are not
@@ -742,7 +773,8 @@ const nameOf = id => (typeOf(id) === 'nt' ? ntName(id) : typeOf(id) === 'mod' ? 
 // Ducks take machines and effect returns, so a path never meets two Ducks and never loops.
 // An EQ is an insert anywhere on the way out: machines, effect returns, Ducks, buses and other EQs go in; it goes on to
 // a bus, another EQ or the Output (never into a Duck: Ducks push channels down at the source). Buses and EQs can feed
-// each other, so those wires are checked for loops. A Saturator is an insert just like an EQ (same wiring rules).
+// each other, so those wires are checked for loops. A Saturator is an insert just like an EQ (same wiring rules), and so is
+// Adinkrahene (the RE-201 tape echo + spring): every channel through it gets its own copy.
 /* Mod wires (k: 'mod') run from a modulation node to one rack knob: w.p = the knob (an automation-lane key), w.d = depth
    (−1…1 of that knob's whole range). A node can take several, one per knob. */
 function modKeysOf(id) {
@@ -754,6 +786,7 @@ function modKeysOf(id) {
   if (ty === 'duck') return ['dk:' + id + ':depth'];
   if (ty === 'eq') { const o = []; for (let i = 0; i < 4; i++) o.push('eq:' + id + ':f' + i, 'eq:' + id + ':g' + i); return o; }
   if (ty === 'sat') return ['sa:' + id + ':drv', 'sa:' + id + ':mix'];
+  if (ty === 'ade') return ['rate', 'fb', 'ev', 'sv'].map(f => 'ad:' + id + ':' + f);
   if (ty === 'mst') return ['mst:out'];
   if (ty === 'out') return ['out:vol'];
   return [];
@@ -769,7 +802,7 @@ function noteLoops(a, b) {
   return false;
 }
 function loops(a, b) { let n = b, g = 0; while (n && g++ < 32) { if (n === a) return true; const w = audioWire(n); n = w ? w.b : ''; } return false; }
-const isIns = t => t === 'eq' || t === 'sat';   // inserts: EQ and Saturator
+const isIns = t => t === 'eq' || t === 'sat' || t === 'ade';   // inserts: EQ, Saturator, Adinkrahene
 /* Plug wires (k: 'plug'): a machine's audio out → the In of a machine that has one (ain). The plugged machine's sound, after
    its own fader, mute, Duck, EQ and Saturator, goes into that machine and nowhere else; it is heard, recorded and stemmed
    as part of the machine it is plugged into. */
@@ -888,6 +921,25 @@ function normSat(c) {
 if (!st.sat || typeof st.sat !== 'object') st.sat = {};
 for (const k in st.sat) if (!st.nodes[k] || typeOf(k) !== 'sat') delete st.sat[k];
 for (const k in st.nodes) if (typeOf(k) === 'sat') st.sat[k] = normSat(st.sat[k]);
+/* Adinkrahene nodes (the RE-201, see 'Adinkrahene' below): mode 0–11 (the RE-201's 1–12), rate 0–1 (Repeat Rate: motor
+   speed, 0 slow … 1 fast), sync 0 = free or a note length in 16ths for head 3 (on the Clock), fb Intensity 0–1, ev Echo
+   volume 0–1, sv Spring volume 0–1, bass / treb ±12 dB, inp Input dB, wow / flt / age / hiss 0–1 (the tape), spr 0–1
+   heads spread L / C / R, dry (the dry signal through), pc (the dry through the preamp too), e2s (echoes into the
+   spring), on. */
+const adeDefaults = () => ({ mode: 8, rate: 0.45, sync: 0, fb: 0.42, ev: 0.6, sv: 0.4, bass: 0, treb: 0, inp: 0, wow: 0.25, flt: 0.3, age: 0.3, hiss: 0.15, spr: 0, dry: true, pc: false, e2s: false, on: true });
+const ADE_SYNC = [0, 2, 3, 4, 6, 8];
+function normAde(c) {
+  const d = adeDefaults(); if (!c || typeof c !== 'object') return d;
+  const num = (v, a, b, dv) => (typeof v === 'number' && isFinite(v) ? clamp(v, a, b) : dv);
+  d.mode = Number.isInteger(c.mode) ? clamp(c.mode, 0, 11) : d.mode; d.sync = ADE_SYNC.includes(c.sync) ? c.sync : 0;
+  for (const k of ['rate', 'fb', 'ev', 'sv', 'wow', 'flt', 'age', 'hiss', 'spr']) d[k] = num(c[k], 0, 1, d[k]);
+  d.bass = num(c.bass, -12, 12, 0); d.treb = num(c.treb, -12, 12, 0); d.inp = num(c.inp, -18, 18, 0);
+  d.dry = c.dry !== false; d.pc = !!c.pc; d.e2s = !!c.e2s; d.on = c.on !== false;
+  return d;
+}
+if (!st.ade || typeof st.ade !== 'object') st.ade = {};
+for (const k in st.ade) if (!st.nodes[k] || typeOf(k) !== 'ade') delete st.ade[k];
+for (const k in st.nodes) if (typeOf(k) === 'ade') st.ade[k] = normAde(st.ade[k]);
 // shared effects: faders 0–1, mapped below. Freeze and Hold never survive a reload.
 const fxDefaults = {
   verb: () => ({ size: 0.523, pre: 0.1, tone: 0.551, low: 0.546, vol: 0.8, mute: false, frz: false }),
@@ -935,7 +987,7 @@ function normPat(p) {
    x in 16ths from the section's first bar, n = the value as 0–1 of the lane's range. Points live with their section, so moving,
    resizing, duplicating or jumping (follow actions, Loop section) carries them along. Keys: m:<machine>:vol|pan|rv|dl,
    b:bus<n>:vol, fx:verb:vol|size|frz, fx:dub:vol|q|fb|toRv, dk:duck<n>:depth, eq:eq<n>:f<band>|g<band>, mst:out, out:vol, tempo. */
-const AU_RE = /^(m:[a-z0-9]+:(vol|pan|rv|dl)|b:bus[1-4]:vol|fx:verb:(vol|size|frz)|fx:dub:(vol|q|fb|toRv)|dk:duck[1-4]:depth|eq:eq[1-4]:[fg][0-3]|sa:sat[1-4]:(drv|mix)|mst:out|out:vol|tempo)$/;
+const AU_RE = /^(m:[a-z0-9]+:(vol|pan|rv|dl)|b:bus[1-4]:vol|fx:verb:(vol|size|frz)|fx:dub:(vol|q|fb|toRv)|dk:duck[1-4]:depth|eq:eq[1-4]:[fg][0-3]|sa:sat[1-4]:(drv|mix)|ad:ade[1-2]:(rate|fb|ev|sv)|mst:out|out:vol|tempo)$/;
 function normAu(o) {
   const out = {};
   if (o && typeof o === 'object') for (const k in o) {
@@ -1076,8 +1128,9 @@ const DK = {};  // ducks (sidechain)
 const FX = {};  // shared send effects: verb, dub
 const EQ = {};  // EQ nodes: the junction each one is, plus every channel copy of its filters
 const SAT = {}; // Saturator nodes: the junction, plus every channel copy (one worklet each)
+const ADE = {}; // Adinkrahene nodes (RE-201): the junction, plus every channel copy (one worklet each)
 const DL = DEVS.map(x => D[x.id]);   // fixed order, built once: hot loops never allocate it again
-Object.defineProperty(H, '_dbg', { value: () => ({ D, M, B, DK, FX, EQ, SAT, satMsg: id => satMsg(id), insertSat: id => insertIns(id, 'sat'), satMatch, syncEqs: () => syncEqs(), insertEq: id => insertEq(id), eqPath: id => eqPath(id), eqResp: (id, i, sr) => bandResp(st.eq[id], i, sr, new Float64Array(EQN)), fOf, eqChanged: (id, slow) => eqChanged(id, slow), canWire, EQN: () => EQN, rec, st, quickDuck, play, stop, setTempo, launch, setSync, addNode, removeNode, connect, openMachine, VIEW, sendFx, applyMix, removeWire: w => removeWire(w), sendWires: () => SW, LU, Gate, kw, luMeter, matchTarget, sendMst, setInsert: v => setInsert(v), recButton, FZ, freeze, unfreeze, refreeze, fzSig, clipRecMod, AIN, CLP, SONG, ainOpen, ainClose, ainMeasure, ainOffF, clipImport, clipRecButton, armToggle, setSong, ensureArr, ensureCtx, secL, openArr }) });
+Object.defineProperty(H, '_dbg', { value: () => ({ D, M, B, DK, FX, EQ, SAT, ADE, adeMsg: id => adeMsg(id), insertAde: id => insertIns(id, 'ade'), satMsg: id => satMsg(id), insertSat: id => insertIns(id, 'sat'), satMatch, syncEqs: () => syncEqs(), insertEq: id => insertEq(id), eqPath: id => eqPath(id), eqResp: (id, i, sr) => bandResp(st.eq[id], i, sr, new Float64Array(EQN)), fOf, eqChanged: (id, slow) => eqChanged(id, slow), canWire, EQN: () => EQN, rec, st, quickDuck, play, stop, setTempo, launch, setSync, addNode, removeNode, connect, openMachine, VIEW, sendFx, applyMix, removeWire: w => removeWire(w), sendWires: () => SW, LU, Gate, kw, luMeter, matchTarget, sendMst, setInsert: v => setInsert(v), recButton, FZ, freeze, unfreeze, refreeze, fzSig, clipRecMod, AIN, CLP, SONG, ainOpen, ainClose, ainMeasure, ainOffF, clipImport, clipRecButton, armToggle, setSong, ensureArr, ensureCtx, secL, openArr }) });
 
 H.linked = id => !!(D[id] && D[id].c.sync);
 H.outDelay = () => M.lat || 0;   // seconds every machine's sound is held back to line up with the slowest
@@ -1207,6 +1260,7 @@ function setLean(on, quiet) {
     if (d.leanFns && d.loaded) for (const fn of d.leanFns) { try { fn(on); } catch (e) { console.error(e); } }
   }
   for (const id in SAT) sendSat(id);   // Saturators drop to 2× oversampling in Lean
+  for (const id in ADE) sendAde(id);   // Adinkrahene's heads read with linear interpolation in Lean
   tellAll(); render(); leanButtons();
   if (!quiet) toast(on ? 'Lean: shared Reverb only, distortion at 1× (Saturators at 2×), closed machines redraw every 2 s, fewer stacked voices.' + (H.playing ? ' The rack’s delay shrinks after Stop.' : '')
            : 'Lean off: every machine back to its full sound.' + (wasSup && H.playing ? ' Their glue and limiters come back at the next Stop.' : ''));
@@ -1406,6 +1460,7 @@ function ensureCtx() {
   if (st.nodes.mst) makeMst();
   for (const id in st.nodes) if (typeOf(id) === 'eq') makeEq(id);
   for (const id in st.nodes) if (typeOf(id) === 'sat') makeSat(id);
+  for (const id in st.nodes) if (typeOf(id) === 'ade') makeAde(id);
   for (const id in st.nodes) if (typeOf(id) === 'bus') makeBus(id);
   for (const id in st.nodes) if (typeOf(id) === 'duck') makeDuck(id);
   for (const id in st.nodes) if (typeOf(id) === 'fx') makeFx(id);
@@ -1614,12 +1669,12 @@ function eqCopy(id) {
   return c;
 }
 const applyEq = id => { const e = EQ[id]; if (e && H.ctx) for (const c of e.copies) eqSet(c, EQ_RAMP); };
-const insReg = id => (typeOf(id) === 'sat' ? SAT[id] : EQ[id]);
+const insReg = id => (typeOf(id) === 'sat' ? SAT[id] : typeOf(id) === 'ade' ? ADE[id] : EQ[id]);
 function dropChain(ch) {
   try { ch.head.disconnect(); ch.tail.disconnect(); } catch (e) {}
   for (const c of ch.copies) {
     const e = insReg(c.id); if (e) e.copies.delete(c);
-    if (c.sat) { c.dead = true; try { c.in.disconnect(); c.out.disconnect(); if (c.wk) { c.wk.disconnect(); c.wk.port.onmessage = null; c.wk.port.close(); } } catch (e) {} continue; }
+    if (c.sat || c.ade) { c.dead = true; try { c.in.disconnect(); c.out.disconnect(); if (c.wk) { c.wk.disconnect(); c.wk.port.onmessage = null; c.wk.port.close(); } } catch (e) {} continue; }
     try { c.in.disconnect(); c.n.forEach(n => n.disconnect()); c.wet.disconnect(); c.dry.disconnect(); c.out.disconnect(); } catch (e) {}
   }
 }
@@ -1629,7 +1684,7 @@ function setEqChain(ch, ids) {
   if (ch.eqc && ch.eqc.sig === sig) return;
   const t = H.ctx.currentTime, old = ch.eqc, head = gainNode(1), tail = gainNode(old ? 0 : 1), copies = [];
   let p = head;
-  for (const id of ids) { const e = insReg(id); if (!e) continue; const c = typeOf(id) === 'sat' ? satCopy(id) : eqCopy(id); e.copies.add(c); copies.push(c); p.connect(c.in); p = c.out; }
+  for (const id of ids) { const e = insReg(id); if (!e) continue; const t = typeOf(id), c = t === 'sat' ? satCopy(id) : t === 'ade' ? adeCopy(id) : eqCopy(id); e.copies.add(c); copies.push(c); p.connect(c.in); p = c.out; }
   p.connect(tail); tail.connect(ch.po); ch.dk.connect(head);
   ch.eqc = { sig, head, tail, copies };
   if (!old) return;
@@ -1644,7 +1699,7 @@ function eqPath(id) { const o = []; let n = id, g = 0; while (n && g++ < 32) { c
 function insPath(id) { const o = []; let n = id, g = 0; while (n && g++ < 32) { const w = audioWire(n); if (!w || w.k) break; if (isIns(typeOf(w.b))) o.push(w.b); n = w.b; } return o; }
 function syncEqs() {
   if (!H.ctx) return;
-  for (const id in st.nodes) { const t = typeOf(id); if (t === 'eq' && !EQ[id]) makeEq(id); else if (t === 'sat' && !SAT[id]) makeSat(id); }
+  for (const id in st.nodes) { const t = typeOf(id); if (t === 'eq' && !EQ[id]) makeEq(id); else if (t === 'sat' && !SAT[id]) makeSat(id); else if (t === 'ade' && !ADE[id]) makeAde(id); }
   const live = ids => ids.filter(k => insReg(k));
   for (const d of DL) if (d.ch && d.ch.eqc) setEqChain(d.ch, d.loaded ? live(insPath(d.id)) : []);
   for (const id in FX) if (FX[id].eqc) setEqChain(FX[id], st.nodes[id] ? live(insPath(id)) : []);
@@ -1883,6 +1938,199 @@ function satPeak(id) {
   const now = performance.now(); let p = 0;
   for (const k of s.copies) if (now - k.pkT < 400 && k.pk > p) p = k.pk;
   return p / dbG(auV('sa:' + id + ':drv', c.drv));
+}
+
+/* ---------- Adinkrahene (ADK-201): a Roland RE-201 Space Echo, as an insert node ----------
+   Tape echo + spring reverb, built like the hardware: Input → preamp → record head on a tape loop, three playback heads
+   (1 : 1.97 : 2.94), the 12-position Mode selector (1–4 echo, 5–11 echo + spring, 12 spring), Repeat Rate (the motor:
+   changes glide, so the pitch bends), Intensity (feedback through the tape's band limits and saturation: past ~80% it
+   runs away and the tape holds it), Echo and Spring volume, Bass and Treble on the wet. The tape: Wow, Flutter, Age
+   (duller, crunchier, dropouts), Hiss (rides on the echoes). Beyond the hardware: Sync (head 3 on a note of the Clock,
+   heads 1 and 2 at a third and two thirds of it), Spread (heads 1 / 2 / 3 left / centre / right), Dry off (wet only),
+   Pre (the dry through the preamp too), Echo → Spring. Each channel through it gets its own copy (one worklet), like the
+   Saturator, so every machine echoes on its own and the stems carry their echoes. No latency: the dry is untouched. */
+const ADE_SRC = `/* Adinkrahene (ADK-201): a Roland RE-201 Space Echo for the rack, one copy per channel.
+   Signal: In (stereo) → Input gain → preamp (asymmetric, the RE-201's colour) → record head on a moving tape loop.
+   Three playback heads (spacing 1 : 1.97 : 2.94, like the real head block) read the tape; the Mode selector (1–12, the
+   RE-201 chart) picks the heads and whether the spring is in. Intensity feeds the selected heads back to the record
+   head, through the loop's band limits and tape saturation, so repeats darken and past ~80% the loop runs away and
+   the tape holds it. Repeat Rate is the motor speed: changes glide (motor inertia), so the pitch bends like the
+   hardware. Wow + flutter move the tape, Age dulls and crushes it and adds dropouts, Hiss rides on the echoes.
+   Spring: three springs (stretched allpass dispersion in each loop, the drip) fed from the preamp (and the echoes, with
+   Echo → Spring). Bass / Treble shape echoes + spring together. Dry passes untouched (no latency) unless Pre colours it.
+   Skips its DSP once input and tails have been silent long enough. */
+const TH=x=>{if(x>3)return 1;if(x<-3)return -1;const x2=x*x;return x*(27+x2)/(27+9*x2)};
+const MODES=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,1,1,0],[1,0,0,1],[0,1,0,1],[0,0,1,1],[1,1,0,1],[0,1,1,1],[1,0,1,1],[1,1,1,1],[0,0,0,1]];
+const HR=[1,1.97,2.94],PB=.12,PN=1/(1.4*(1-.12*.12*.9));
+const SPG=2.2;   // spring level at Spring = 100%
+const PRE=x=>(TH(1.4*x+PB)-TH(PB))*PN;
+// RBJ shelves as [b0,b1,b2,a1,a2]
+function shelfK(lo,f,db,fs){const A=Math.pow(10,db/40),w=2*Math.PI*f/fs,cs=Math.cos(w),al=Math.sin(w)*Math.SQRT1_2,sA=2*Math.sqrt(A)*al;let b,a;
+  if(lo){b=[A*((A+1)-(A-1)*cs+sA),2*A*((A-1)-(A+1)*cs),A*((A+1)-(A-1)*cs-sA)];a=[(A+1)+(A-1)*cs+sA,-2*((A-1)+(A+1)*cs),(A+1)+(A-1)*cs-sA]}
+  else{b=[A*((A+1)+(A-1)*cs+sA),-2*A*((A-1)+(A+1)*cs),A*((A+1)+(A-1)*cs-sA)];a=[(A+1)-(A-1)*cs+sA,2*((A-1)-(A+1)*cs),(A+1)-(A-1)*cs-sA]}
+  const g=1/a[0];return[b[0]*g,b[1]*g,b[2]*g,a[1]*g,a[2]*g]}
+class Spring{constructor(sr,ms,a,K,n){this.L=Math.round(ms*sr/1000);this.b=new Float32Array(this.L);this.i=0;this.a=a;this.K=K;this.n=n;
+    this.x=new Float32Array(n*K);this.y=new Float32Array(n*K);this.k=0;this.lp=0;this.g=0;this.T(sr,2.8)}
+  T(sr,t60){const loop=this.L+this.n*this.K*(1+this.a)/(1-this.a);this.g=Math.pow(10,-3*loop/(sr*t60))}
+  clear(){this.b.fill(0);this.x.fill(0);this.y.fill(0);this.lp=0}
+  run(v,lpK){const b=this.b,i=this.i,o=b[i];this.lp+=(o-this.lp)*lpK;v+=this.g*this.lp;
+    const a=this.a,K=this.K,X=this.x,Y=this.y,n=this.n;let j=this.k;
+    for(let s=0;s<n;s++,j+=K){const y=a*(v-Y[j])+X[j];X[j]=v;Y[j]=y;v=y}
+    this.k=this.k+1>=K?0:this.k+1;b[i]=v;this.i=i+1>=this.L?0:i+1;return o}}
+class AntAde extends AudioWorkletProcessor{
+  constructor(){super();const sr=sampleRate;this.sr=sr;
+    this.N=1<<Math.ceil(Math.log2(sr*2.3));this.M=this.N-1;this.tp=new Float32Array(this.N);this.w=0;
+    this.d1=-1;this.d1T=.12*sr;this.sk=1-Math.exp(-1/(.2*sr));
+    this.P={mode:4,fb:.45,ev:.6,sv:.25,inG:1,wow:.25,flt:.3,age:.3,hiss:.1,spr:0,dry:1,pc:0,e2s:0,on:1,lean:0,bass:0,treb:0};
+    this.g={fb:.45,ev:.6,sv:.25,inG:1,dry:1,on:1,spr:0};this.hg=[0,0,1,0];
+    this.p1=Math.random();this.p2=Math.random();this.p3=Math.random();this.dr=0;this.drT=0;this.drift=0;this.driftT=0;this.cnt=0;this.mLast=0;this.gdLast=1;this.seed=(Math.random()*4294967296)>>>0;
+    this.hp=[0,0];this.lp=[0,0,0];this.ff=[0,0,0,0,0,0,0,0];this.eqL=[0,0,0,0];this.eqR=[0,0,0,0];this.kLo=null;this.kHi=null;
+    const S=sr/48000,K=Math.max(2,Math.round(5*S));
+    this.sp=[new Spring(sr,33.7,.58,K,9),new Spring(sr,39.1,.62,K,10),new Spring(sr,45.9,.66,K,11)];
+    this.sh=[0,0,0];this.env=0;this.quiet=0;this.idle=true;this.vis=false;this.vn=0;this.vh=[0,0,0];this.vs=0;this.vi=0;
+    this.coefs();
+    this._m=e=>{const m=e.data;if(m.c==='vis'){this.vis=!!m.on;return}if(m.c==='set')this.set(m)};
+    this.port.onmessage=e=>{const m=e.data;if(m&&m.c==='flush'){this.Q=[];return}if(m&&m.at>currentFrame){(this.Q||(this.Q=[])).push(m);this.Q.sort((a,b)=>a.at-b.at)}else this._m(e)}}
+  set(m){const P=this.P;for(const k in P)if(m[k]!==undefined)P[k]=+m[k];
+    if(m.d1!==undefined)this.d1T=Math.max(.02*this.sr,Math.min(m.d1*this.sr,(this.N-16)/HR[2]));
+    this.coefs();if(!this.got){this.got=true;const g=this.g;for(const k in g)g[k]=P[k];const mk=MODES[P.mode|0];for(let h=0;h<4;h++)this.hg[h]=mk[h];this.d1=this.d1T}
+    if(P.on||P.fb>.75)this.idle=false;this.quiet=0}
+  coefs(){const sr=this.sr,P=this.P;
+    this.kLo=shelfK(true,120,P.bass,sr);this.kHi=shelfK(false,3200,P.treb,sr);this.eqOn=P.bass!==0||P.treb!==0;
+    const fl=7200*Math.pow(2500/7200,P.age);this.lK=1-Math.exp(-2*Math.PI*fl/sr);this.hK=Math.exp(-2*Math.PI*75/sr);
+    this.tk=1.05+P.age*.9;this.spLK=1-Math.exp(-2*Math.PI*4200/sr);this.soK=1-Math.exp(-2*Math.PI*4600/sr);this.shK=Math.exp(-2*Math.PI*170/sr);
+    this.wf=[(.55+.25*P.wow)/sr,7.3/sr,11.9/sr];this.nh=MODES[P.mode|0][0]+MODES[P.mode|0][1]+MODES[P.mode|0][2]}
+  clear(){this.tp.fill(0);this.w=0;for(const s of this.sp)s.clear();this.hp=[0,0];this.lp=[0,0,0];this.eqL.fill(0);this.eqR.fill(0);this.sh=[0,0,0];this.env=0}
+  rnd(){let s=this.seed;s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;this.seed=s;return s/4294967296}
+  process(ins,outs){
+    if(this.Q&&this.Q.length)while(this.Q.length&&this.Q[0].at<currentFrame+128)this._m({data:this.Q.shift()});
+    const x=ins[0],O=outs[0],oL=O[0],oR=O[1]||O[0],n=oL.length,L=x&&x[0],R=x&&(x[1]||x[0]),P=this.P;
+    if(this.idle){let hot=false;if(L&&P.on)for(let i=0;i<n;i++){const a=L[i],b=R[i];if(a>1e-7||a<-1e-7||b>1e-7||b<-1e-7){hot=true;break}}
+      if(!hot){this.pass(L,R,oL,oR,n);this.report(0);return true}this.idle=false;this.quiet=0}
+    const sr=this.sr,tp=this.tp,M=this.M,g=this.g,hg=this.hg,mask=MODES[P.mode|0],lean=!!P.lean,age=P.age;
+    const sa=1-Math.exp(-1/(.03*sr)),ha=1-Math.exp(-1/(.006*sr)),sk=this.sk,d1T=this.d1T;
+    const nh=Math.max(1,this.nh),fbK=1.25/(1+.45*(nh-1)),evN=1/(1+.3*(nh-1)),lK=this.lK,hK=this.hK,tk=this.tk,itk=1/tk,spLK=this.spLK,soK=this.soK,shK=1-this.shK;
+    const kL=this.kLo,kH=this.kHi,eqOn=this.eqOn,eL=this.eqL,eR=this.eqR,sp0=this.sp[0],sp1=this.sp[1],sp2=this.sp[2],hp=this.hp,lp=this.lp,sh=this.sh;
+    const hiss=P.hiss*P.hiss*.02,pc=P.pc,e2s=P.e2s?.6:0,T=6.283185307;
+    // the tape's own motion, worked out per block and slid across it: wow (slow, part random drift), flutter (capstan, fast)
+    if((++this.cnt&1)===0){this.driftT=this.rnd()*2-1;this.drT=this.rnd()<age*age*.008?this.rnd():0}
+    const wf=this.wf,mA=this.mLast!==undefined?this.mLast:0;
+    this.drift+=(this.driftT-this.drift)*.05;this.dr+=(this.drT-this.dr)*.18;
+    this.p1=(this.p1+wf[0]*n)%1;this.p2=(this.p2+wf[1]*n)%1;this.p3=(this.p3+wf[2]*n)%1;
+    const mB=P.wow*(.0032*Math.sin(T*this.p1)+.0016*this.drift)+P.flt*(.0007*Math.sin(T*this.p2)+.00035*Math.sin(T*this.p3));this.mLast=mB;
+    const gdA=this.gdLast!==undefined?this.gdLast:1,gdB=1-age*.45*this.dr;this.gdLast=gdB;
+    let fb=g.fb,ev=g.ev,sv=g.sv,inG=g.inG,dry=g.dry,on=g.on,spr=g.spr,h0=hg[0],h1=hg[1],h2=hg[2],h3=hg[3];
+    const t0=P.fb,t1=P.ev,t2=P.sv,t3=P.inG,t4=P.dry,t5=P.on,t6=P.spr,m0=mask[0],m1=mask[1],m2=mask[2],m3=mask[3];
+    let d1=this.d1,w=this.w,pkO=0,pkI=0,vh0=this.vh[0],vh1=this.vh[1],vh2=this.vh[2],vs=this.vs,vi=this.vi,env=this.env,s1=sh[1],s2=sh[2];
+    let hp0=hp[0],hp1=hp[1],lp0=lp[0],lp1=lp[1];const vis=this.vis,HR1=HR[1],HR2=HR[2];
+    for(let i=0;i<n;i++){
+      fb+=(t0-fb)*sa;ev+=(t1-ev)*sa;sv+=(t2-sv)*sa;inG+=(t3-inG)*sa;dry+=(t4-dry)*sa;on+=(t5-on)*sa;spr+=(t6-spr)*sa;
+      h0+=(m0-h0)*ha;h1+=(m1-h1)*ha;h2+=(m2-h2)*ha;h3+=(m3-h3)*ha;
+      d1+=(d1T-d1)*sk;
+      const u=i/n,D=d1*(1+mA+(mB-mA)*u),gd=gdA+(gdB-gdA)*u;
+      // playback heads (Hermite; Lean: linear)
+      let r0=0,r1=0,r2=0;
+      for(let h=0;h<3;h++){const hh=h===0?h0:h===1?h1:h2;if(hh<1e-4)continue;const p=w-D*(h===0?1:h===1?HR1:HR2),j=Math.floor(p),f=p-j;let v;
+        if(lean){const a=tp[j&M];v=a+(tp[(j+1)&M]-a)*f}
+        else{const xm=tp[(j-1)&M],x0=tp[j&M],x1=tp[(j+1)&M],x2=tp[(j+2)&M],c1=.5*(x1-xm),c2=xm-2.5*x0+2*x1-.5*x2,c3=.5*(x2-xm)+1.5*(x0-x1);v=((c3*f+c2)*f+c1)*f+x0}
+        v*=gd*hh;if(h===0)r0=v;else if(h===1)r1=v;else r2=v}
+      const sum=r0+r1+r2;
+      // input → preamp → record head, with the selected heads fed back
+      const xl=L?L[i]:0,xr=L?R[i]:0,xi=(xl+xr)*.5*inG,ai=xi<0?-xi:xi;if(ai>pkI)pkI=ai;
+      const pre=PRE(xi)*on;
+      let v=pre+fb*fbK*sum;
+      // the loop's band limits: low cut, two poles of tape high loss, then the tape itself
+      const hy=v-hp0+hK*hp1;hp0=v;hp1=hy;
+      lp0+=(hy-lp0)*lK;lp1+=(lp0-lp1)*lK;v=TH(lp1*tk)*itk;
+      tp[w]=v;w=(w+1)&M;
+      // spring tank: fed by the preamp (and the echoes), band-limited like the real pan
+      let so=0;
+      if(h3>1e-4){let yi=(pre+e2s*sum)*h3;yi=TH(yi*1.6)*.625;
+        so=sp0.run(yi,spLK)+sp1.run(-yi,spLK)*.9+sp2.run(yi,spLK)*.8;
+        s1+=(so-s1)*soK;so=s1-s2;s2+=so*shK}
+      // echoes: heads spread L / C / R if asked (the hardware is mono), then the wet EQ
+      const eg=ev*ev*2*evN,sg=sv*sv*SPG;
+      let wl=(r0+r1+r2*(1-spr))*eg,wr=(r0*(1-spr)+r1+r2)*eg;
+      const ae=sum<0?-sum:sum;env=ae>env?ae:env*.99995;
+      if(hiss>0){const nz=(this.rnd()-.5)*hiss*eg*(env<.125?env*8:1);wl+=nz;wr+=nz}
+      wl+=so*sg;wr+=so*sg;
+      if(eqOn){let y=kL[0]*wl+eL[0];eL[0]=kL[1]*wl-kL[3]*y+eL[1];eL[1]=kL[2]*wl-kL[4]*y;wl=y;y=kH[0]*wl+eL[2];eL[2]=kH[1]*wl-kH[3]*y+eL[3];eL[3]=kH[2]*wl-kH[4]*y;wl=y;
+        y=kL[0]*wr+eR[0];eR[0]=kL[1]*wr-kL[3]*y+eR[1];eR[1]=kL[2]*wr-kL[4]*y;wr=y;y=kH[0]*wr+eR[2];eR[2]=kH[1]*wr-kH[3]*y+eR[3];eR[3]=kH[2]*wr-kH[4]*y;wr=y}
+      // output stage: transparent up to about −6 dBFS, never past +6
+      wl=TH(wl*.5)*2;wr=TH(wr*.5)*2;
+      const aw=(wl<0?-wl:wl)+(wr<0?-wr:wr);if(aw>pkO)pkO=aw;
+      if(vis){let a=r0<0?-r0:r0;if(a>vh0)vh0=a;a=r1<0?-r1:r1;if(a>vh1)vh1=a;a=r2<0?-r2:r2;if(a>vh2)vh2=a;a=so<0?-so:so;if(a>vs)vs=a;if(ai>vi)vi=ai}
+      let dl=xl,dr=xr;if(pc){const ig=inG>.05?inG:.05;dl=PRE(xl*ig)/ig;dr=PRE(xr*ig)/ig}
+      oL[i]=dl*dry+wl;if(oR!==oL)oR[i]=dr*dry+wr}
+    g.fb=fb;g.ev=ev;g.sv=sv;g.inG=inG;g.dry=dry;g.on=on;g.spr=spr;hg[0]=h0;hg[1]=h1;hg[2]=h2;hg[3]=h3;hp[0]=hp0;hp[1]=hp1;lp[0]=lp0;lp[1]=lp1;sh[1]=s1;sh[2]=s2;
+    this.d1=d1;this.w=w;this.env=env;this.vh[0]=vh0;this.vh[1]=vh1;this.vh[2]=vh2;this.vs=vs;this.vi=vi;
+    // asleep once nothing comes in and the tails are gone (a runaway loop keeps it awake, as it should)
+    if(pkI<1e-7&&pkO<2e-6){this.quiet+=n;if(this.quiet>sr*.6+d1*HR2){this.idle=true;this.clear()}}else this.quiet=0;
+    this.report(1);return true}
+  pass(L,R,oL,oR,n){const P=this.P;if(!L){oL.fill(0);if(oR!==oL)oR.fill(0);return}
+    const dg=P.dry;if(P.pc&&dg>0){const ig=P.inG>.05?P.inG:.05;for(let i=0;i<n;i++){oL[i]=PRE(L[i]*ig)/ig*dg;if(oR!==oL)oR[i]=PRE(R[i]*ig)/ig*dg}return}
+    if(dg===1){oL.set(L);if(oR!==oL)oR.set(R);return}for(let i=0;i<n;i++){oL[i]=L[i]*dg;if(oR!==oL)oR[i]=R[i]*dg}}
+  // while the node is on screen, ~30 a second: each head's level, the spring's, the input, the tape speed
+  report(on){if(!this.vis)return;if(++this.vn<12)return;this.vn=0;
+    this.port.postMessage({c:'v',h:on?this.vh.slice():[0,0,0],s:on?this.vs:0,i:on?this.vi:0,d:this.d1>0?this.d1/this.sr:this.d1T/this.sr,run:on&&!this.idle});
+    this.vh[0]=this.vh[1]=this.vh[2]=0;this.vs=0;this.vi=0}}
+registerProcessor('ant-ade',AntAde);
+`;
+// the RE-201's mode chart: which playback heads, and the spring
+const ADE_MODES = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 1, 1, 0], [1, 0, 0, 1], [0, 1, 0, 1], [0, 0, 1, 1], [1, 1, 0, 1], [0, 1, 1, 1], [1, 0, 1, 1], [1, 1, 1, 1], [0, 0, 0, 1]];
+const ADE_HR = [1, 1.97, 2.94];
+const adeModeTxt = m => { const k = ADE_MODES[m], h = [0, 1, 2].filter(i => k[i]).map(i => i + 1); return 'Mode ' + (m + 1) + ' · ' + (h.length ? (h.length > 1 ? 'heads ' : 'head ') + h.join(' + ') : 'no echo') + (k[3] ? (h.length ? ' + spring' : ' · spring only') : ''); };
+// head 1's delay in seconds: Repeat Rate (190 ms slow … 58 ms fast), or on the Clock (head 3 = the note, so head 1 = a third of it)
+const adeRateS = r => 0.19 * Math.pow(58 / 190, r);
+function adeD1(c, rate) { return c.sync ? clamp(c.sync * 15 / (H.bpm || st.bpm) / ADE_HR[2], 0.02, 2.05 / ADE_HR[2]) : adeRateS(rate); }
+const adeMs = s => Math.round(s * 1000) + ' ms';
+function adeMsg(id, at) {
+  const c = st.ade[id], rate = auV('ad:' + id + ':rate', c.rate);
+  return auAt({ c: 'set', mode: c.mode, d1: adeD1(c, rate), fb: auV('ad:' + id + ':fb', c.fb), ev: auV('ad:' + id + ':ev', c.ev), sv: auV('ad:' + id + ':sv', c.sv),
+    inG: dbG(c.inp), bass: c.bass, treb: c.treb, wow: c.wow, flt: c.flt, age: c.age, hiss: c.hiss, spr: c.spr, dry: c.dry ? 1 : 0, pc: c.pc ? 1 : 0, e2s: c.e2s ? 1 : 0, on: c.on ? 1 : 0, lean: st.lean ? 1 : 0 }, at);
+}
+function sendAde(id, at) { const s = ADE[id]; if (!s || !st.ade[id]) return; const m = adeMsg(id, at); for (const c of s.copies) if (c.wk) c.wk.port.postMessage(m); }
+const adePort = id => (ADE[id] ? { port: { postMessage: m => { for (const c of ADE[id].copies) if (c.wk) c.wk.port.postMessage(m); } } } : null);
+function adeWk(c) {
+  const ctx = H.ctx, s = ADE[c.id]; if (c.dead || c.wk || !s) return;
+  c.wk = new AudioWorkletNode(ctx, 'ant-ade', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers' });
+  c.wk.port.onmessage = e => { const m = e.data; if (m && m.c === 'v') { c.v = m; c.vT = performance.now(); } };
+  c.wk.port.postMessage(adeMsg(c.id)); if (s.vis) c.wk.port.postMessage({ c: 'vis', on: true });
+  c.in.connect(c.wk); c.wk.connect(c.out);
+  if (c.thru) { try { c.in.disconnect(c.out); } catch (e) {} c.thru = false; }
+}
+function adeCopy(id) {
+  const c = { id, ade: true, in: gainNode(1), out: gainNode(1), wk: null, dead: false, thru: false, v: null, vT: 0 };
+  if (M.adeOk) adeWk(c);
+  else { c.in.connect(c.out); c.thru = true; M.adeP.then(() => adeWk(c)).catch(() => {}); }   // straight through until the worklet is in
+  return c;
+}
+function makeAde(id) {
+  if (!H.ctx || ADE[id]) return;
+  if (!st.ade[id]) st.ade[id] = adeDefaults();
+  if (!M.adeP) { M.adeP = H.ctx.audioWorklet ? H.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([ADE_SRC], { type: 'application/javascript' }))) : Promise.reject(new Error('no AudioWorklet')); M.adeP.then(() => { M.adeOk = true; }).catch(e => console.error(e)); }
+  const s = ADE[id] = { in: gainNode(1), xf: gainNode(0), an: H.ctx.createAnalyser(), dest: undefined, copies: new Set(), vis: false, visT: 0 };
+  s.an.fftSize = 1024;
+  s.in.connect(s.xf); s.in.connect(s.an);
+  reroute(s, destNode(id));
+}
+function dropAde(id) {
+  const s = ADE[id]; if (!s) return;
+  delete ADE[id];
+  syncEqs();
+  reroute(s, null);
+  setTimeout(() => { try { s.in.disconnect(); } catch (x) {} }, 120);
+}
+function adeVis(id, on) {
+  const s = ADE[id]; if (!s || s.vis === on) return;
+  s.vis = on; for (const c of s.copies) if (c.wk) c.wk.port.postMessage({ c: 'vis', on });
+}
+// what the copies say right now: the loudest of each head, the spring and the input across them, and the tape speed
+function adeRead(id) {
+  const s = ADE[id]; if (!s) return null;
+  const now = performance.now(), o = { h: [0, 0, 0], s: 0, i: 0, d: 0, run: false };
+  for (const k of s.copies) { const v = k.v; if (!v || now - k.vT > 400) continue; for (let i = 0; i < 3; i++) if (v.h[i] > o.h[i]) o.h[i] = v.h[i]; if (v.s > o.s) o.s = v.s; if (v.i > o.i) o.i = v.i; o.d = v.d; o.run = o.run || v.run; }
+  return o;
 }
 
 /* ---------- shared send effects: Reverb and Dub Delay ----------
@@ -2283,6 +2531,7 @@ function destNode(id) {
   if (typeOf(w.b) === 'duck') { if (!DK[w.b]) makeDuck(w.b); return DK[w.b].in; }
   if (typeOf(w.b) === 'eq') { if (!EQ[w.b]) makeEq(w.b); return EQ[w.b] ? EQ[w.b].in : null; }
   if (typeOf(w.b) === 'sat') { if (!SAT[w.b]) makeSat(w.b); return SAT[w.b] ? SAT[w.b].in : null; }
+  if (typeOf(w.b) === 'ade') { if (!ADE[w.b]) makeAde(w.b); return ADE[w.b] ? ADE[w.b].in : null; }
   return null;
 }
 function onAir(id) {
@@ -2661,6 +2910,7 @@ function tempoApply(v, p) {
   } else H.map.reset(0, 0, v);
   DL.forEach(d => { if (d.adapter && d.c.sync) applyTempo(d); });
   sendMaps(); sendFx('dub');
+  for (const id in ADE) if (st.ade[id] && st.ade[id].sync) sendAde(id);   // synced tape speeds follow the Clock
   renderTempo();
 }
 let taps = [];
@@ -2840,6 +3090,10 @@ function AUS(k) {
     const id = a[1], f = a[2], c = () => st.sat[id] || satDefaults(), on = () => !!(st.nodes[id] && SAT[id]), grp = 'Saturator ' + id.slice(3);
     s = f === 'drv' ? Object.assign(lin(-36, 36, 0.1), { grp, name: 'Drive', kind: 'm', tgt: 'sa:' + id, fd: 'sdrv-' + id, fmt: v => dbS(v) + ' dB', get: () => c().drv, on })
                     : Object.assign(lin(0, 1), { grp, name: 'Dry/Wet', kind: 'm', tgt: 'sa:' + id, fd: 'smix-' + id, fmt: pctTxt, get: () => c().mix, on });
+  } else if (a[0] === 'ad') {
+    const id = a[1], f = a[2], c = () => st.ade[id] || adeDefaults(), on = () => !!(st.nodes[id] && ADE[id]), grp = nameOf(id), tgt = 'ad:' + id, fd = 'a' + f + '-' + id;
+    s = f === 'rate' ? Object.assign(lin(0, 1), { grp, name: 'Rate', kind: 'm', tgt, fd, fmt: v => adeMs(adeRateS(v)), get: () => c().rate, on })
+      : Object.assign(lin(0, 1), { grp, name: f === 'fb' ? 'Intensity' : f === 'ev' ? 'Echo' : 'Spring', kind: 'm', tgt, fd, fmt: pctTxt, get: () => c()[f], on });
   } else if (k === 'mst:out') s = Object.assign(lin(-12, 18, 0.1), { grp: 'Master', name: 'Gain', kind: 'm', tgt: 'mst', fd: 'mout', fmt: v => dbS(v) + ' dB', get: () => st.mst.out, on: () => !!(st.nodes.mst && M.mw) });
   else if (k === 'out:vol') s = Object.assign(lin(0, 1), { grp: 'Output', name: 'Level', kind: 'p', fd: 'vol-master', fmt: dbTxt, get: () => st.master, on: () => !!M.fader, params: () => [[M.fader.gain, volG]] });
   else if (k === 'tempo') s = Object.assign(lin(40, 240, 0.1), { grp: 'Clock', name: 'Tempo', kind: 'tempo', fmt: v => v.toFixed(1) + ' BPM', get: () => st.bpm, on: () => true });
@@ -2922,8 +3176,9 @@ function sendGroup(g, t) {
   if (g === 'fx:verb') sendFx('verb', t); else if (g === 'fx:dub') sendFx('dub', t); else if (g === 'mst') sendMst(t);
   else if (g.startsWith('dk:')) sendDuck(g.slice(3), t);
   else if (g.startsWith('sa:')) { sendSat(g.slice(3), t); const x = S[g.slice(3)]; if (x) x._k = ''; }
+  else if (g.startsWith('ad:')) sendAde(g.slice(3), t);
 }
-const grpPort = g => (g === 'fx:verb' ? FX.verb && FX.verb.wk : g === 'fx:dub' ? FX.dub && FX.dub.wk : g === 'mst' ? M.mw : g.startsWith('dk:') ? DK[g.slice(3)] && DK[g.slice(3)].env : g.startsWith('sa:') ? satPort(g.slice(3)) : null);
+const grpPort = g => (g === 'fx:verb' ? FX.verb && FX.verb.wk : g === 'fx:dub' ? FX.dub && FX.dub.wk : g === 'mst' ? M.mw : g.startsWith('dk:') ? DK[g.slice(3)] && DK[g.slice(3)].env : g.startsWith('sa:') ? satPort(g.slice(3)) : g.startsWith('ad:') ? adePort(g.slice(3)) : null);
 // which groups should be playing now, each with its lanes
 function auWant() {
   const out = new Map();
@@ -3084,6 +3339,7 @@ function fdKey(id) {
   if (m) { const f = m[1], x = m[2]; if (x === 'master') return f === 'vol' ? 'out:vol' : null; if (D[x]) return 'm:' + x + ':' + f; if (/^bus[1-4]$/.test(x) && f === 'vol') return 'b:' + x + ':vol'; return null; }
   if ((m = /^dep-(duck[1-4])$/.exec(id))) return 'dk:' + m[1] + ':depth';
   if ((m = /^s(drv|mix)-(sat[1-4])$/.exec(id))) return 'sa:' + m[2] + ':' + m[1];
+  if ((m = /^a(rate|fb|ev|sv)-(ade[1-2])$/.exec(id))) return 'ad:' + m[2] + ':' + m[1];
   return { rsz: 'fx:verb:size', rvol: 'fx:verb:vol', dfb: 'fx:dub:fb', drv: 'fx:dub:toRv', dvol: 'fx:dub:vol', mout: 'mst:out' }[id] || null;
 }
 const FD = {};   // lane key → its fader on the canvas (so it can follow the lane)
@@ -4507,6 +4763,129 @@ function satFrame(id, x, now) {
   txt(x.pkT, 'in ' + dbS(20 * Math.log10(Math.max(p, 1e-6))) + ' dBFS');
 }
 function satChanged(id, slow) { sendSat(id); satUi(id); drawSat(id); save(); if (slow) render(); }
+// The Adinkrahene node (RE-201 Space Echo): the tape loop with its erase, record and three playback heads, lit by the
+// Mode and by what each head is playing (drag across = Repeat Rate, up / down = Intensity), then the Mode selector and
+// the panel in the hardware's order (Rate, Intensity, Echo, Spring, Bass, Treble, Input), the tape, and the extras.
+const ADV = { W: 252, H: 100, hx: [36, 64, 112, 158, 204] };
+function buildAde(id) {
+  const x = S[id] = {}, c = st.ade[id] || (st.ade[id] = adeDefaults());
+  const sv = (t, a) => { const e = document.createElementNS(SVGNS, t); if (a) for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const set = (k, v, slow) => { c[k] = v; adeChanged(id, slow); };
+  meterEl(x);
+  // the tape loop
+  x.svg = sv('svg', { viewBox: `0 0 ${ADV.W} ${ADV.H}`, preserveAspectRatio: 'none', 'aria-hidden': 'true' });
+  x.tape = sv('rect', { class: 'tape', x: 8, y: 6, width: ADV.W - 16, height: 52, rx: 24 });
+  x.svg.append(x.tape);
+  x.lv = []; x.hd = [];
+  ADV.hx.forEach((hx, i) => {
+    const r = sv('rect', { class: 'hd' + (i === 0 ? ' er' : ''), x: hx - 7, y: 52, width: 14, height: 12 }), t = sv('text', { class: 'gt', x: hx, y: 73, 'text-anchor': 'middle' });
+    t.textContent = ['ERASE', 'REC', '1', '2', '3'][i];
+    const b = sv('rect', { class: 'lv' + (i === 1 ? ' rc' : ''), x: hx - 2, y: 48, width: 4, height: 0 });
+    x.svg.append(b, r, t); if (i) { x.lv.push(b); x.hd.push(r); }
+  });
+  x.ms = sv('text', { class: 'ms3', x: ADV.W / 2, y: 30, 'text-anchor': 'middle' });
+  x.fbT = sv('text', { class: 'fbt', x: ADV.W / 2, y: 43, 'text-anchor': 'middle' });
+  x.svg.append(x.ms, x.fbT);
+  { const t = sv('text', { class: 'gt', x: 8, y: 92 }); t.textContent = 'SPRING'; x.svg.append(t); }
+  let z = 'M52 88'; for (let i = 0; i < 24; i++) z += ' l4 ' + (i % 2 ? 6 : -6) + ' l4 ' + (i % 2 ? -6 : 6);
+  x.spb = sv('path', { class: 'spb', d: z }); x.spl = sv('path', { class: 'spl', d: z });
+  x.svg.append(x.spb, x.spl);
+  x.view = el('div', { class: 'adev x', title: 'The tape loop: lit heads are the ones the Mode plays, their bars what each is playing. Drag across: Repeat Rate (the motor: the pitch bends while it changes). Drag up / down: Intensity. Shift = fine. Double-click: back to the defaults for both.' }, x.svg);
+  x.view.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return; e.preventDefault();
+    let px = e.clientX, py = e.clientY; x.view.setPointerCapture(e.pointerId);
+    const kR = 'ad:' + id + ':rate', kF = 'ad:' + id + ':fb';
+    const mv = ev => {
+      const k = ev.shiftKey ? 0.2 : 1, dx = (ev.clientX - px) * k / 220, dy = (py - ev.clientY) * k / 160; px = ev.clientX; py = ev.clientY;
+      if (!c.sync && dx) { c.rate = Math.round(clamp(c.rate + dx, 0, 1) * 1000) / 1000; auTouch(kR, c.rate); x.f.rate._set(c.rate); }
+      if (dy) { c.fb = Math.round(clamp(c.fb + dy, 0, 1) * 1000) / 1000; auTouch(kF, c.fb); x.f.fb._set(c.fb); }
+      adeChanged(id);
+    };
+    const up = () => { x.view.removeEventListener('pointermove', mv); x.view.removeEventListener('pointerup', up); x.view.removeEventListener('pointercancel', up); auUntouch(kR); auUntouch(kF); adeChanged(id, true); };
+    x.view.addEventListener('pointermove', mv); x.view.addEventListener('pointerup', up); x.view.addEventListener('pointercancel', up);
+  });
+  x.view.addEventListener('dblclick', () => { const d = adeDefaults(); c.rate = d.rate; c.fb = d.fb; x.f.rate._set(c.rate); x.f.fb._set(c.fb); adeChanged(id, true); });
+  // the Mode selector: the RE-201's chart (1–4 echo, 5–11 echo + spring, 12 spring)
+  x.modes = el('div', { class: 'seg m12 x', role: 'group', 'aria-label': 'Mode' });
+  ADE_MODES.forEach((k, i) => { const b = el('button', { type: 'button', title: adeModeTxt(i), class: k[3] ? 'sp' : '' }, String(i + 1)); b._v = i; b.onclick = () => set('mode', i, true); x.modes.append(b); });
+  x.kind = el('div', { class: 'satk x' }, '');
+  x.f = {};
+  const pc = v => Math.round(v * 100) + '%', dbT = v => dbS(v) + ' dB';
+  x.f.rate = fader('arate-' + id, 'Rate', c.rate, 0, 1, 0.001, v => adeMs(adeRateS(v)), v => set('rate', v), adeDefaults().rate);
+  x.f.rate.title = 'Repeat Rate: the tape speed. Head 1’s delay (heads 2 and 3 are about twice and three times it). Changes glide like the motor, so the echoes bend in pitch.';
+  x.sync = el('div', { class: 'seg s6 x', role: 'group', 'aria-label': 'Sync' });
+  [[0, 'Free', 'Repeat Rate sets the speed'], [2, '1/8', 'Head 3 on 1/8 of the Clock (heads 1 and 2 at a third and two thirds of it)'], [3, '3/16', 'Head 3 on a dotted 1/8 of the Clock'], [4, '1/4', 'Head 3 on 1/4 of the Clock'], [6, '3/8', 'Head 3 on a dotted 1/4 of the Clock'], [8, '1/2', 'Head 3 on 1/2 of the Clock']]
+    .forEach(([v, l, t]) => { const b = el('button', { type: 'button', title: t }, l); b._v = v; b.onclick = () => set('sync', v, true); x.sync.append(b); });
+  x.f.fb = fader('afb-' + id, 'Intens.', c.fb, 0, 1, 0.005, pc, v => set('fb', v), adeDefaults().fb);
+  x.f.fb.title = 'Intensity: how much of the selected heads goes back onto the tape. Past about 80% it runs away into self-oscillation and the tape saturation holds it. More heads run away sooner.';
+  x.f.ev = fader('aev-' + id, 'Echo', c.ev, 0, 1, 0.005, pc, v => set('ev', v), adeDefaults().ev);
+  x.f.ev.title = 'Echo volume';
+  x.f.sv = fader('asv-' + id, 'Spring', c.sv, 0, 1, 0.005, pc, v => set('sv', v), adeDefaults().sv);
+  x.f.sv.title = 'Spring reverb volume (Modes 5–12): three springs, fed by the preamp';
+  x.f.bass = fader('abass-' + id, 'Bass', c.bass, -12, 12, 0.1, dbT, v => set('bass', Math.abs(v) < 0.15 ? 0 : v), 0);
+  x.f.bass.title = 'Bass on the echoes and the spring (shelf at 120 Hz). The dry stays as it is.';
+  x.f.treb = fader('atreb-' + id, 'Treble', c.treb, -12, 12, 0.1, dbT, v => set('treb', Math.abs(v) < 0.15 ? 0 : v), 0);
+  x.f.treb.title = 'Treble on the echoes and the spring (shelf at 3.2 kHz)';
+  x.f.inp = fader('ainp-' + id, 'Input', c.inp, -18, 18, 0.1, dbT, v => set('inp', Math.abs(v) < 0.15 ? 0 : v), 0);
+  x.f.inp.title = 'Input volume: how hard the preamp and the tape are hit. Up = grittier echoes and a crunchier spring.';
+  const tape = [['wow', 'Wow', 'Slow pitch drift of the tape (part random)'], ['flt', 'Flutter', 'Fast pitch wobble from the capstan'],
+    ['age', 'Age', 'A worn tape: duller and more saturated repeats, and dropouts'], ['hiss', 'Hiss', 'Tape hiss on the echoes (follows them, so silence stays silent)']];
+  for (const [k, l, t] of tape) { x.f[k] = fader('a' + k + '-' + id, l, c[k], 0, 1, 0.005, pc, v => set(k, v), adeDefaults()[k]); x.f[k].title = t; }
+  x.f.spr = fader('aspr-' + id, 'Spread', c.spr, 0, 1, 0.005, pc, v => set('spr', v), 0);
+  x.f.spr.title = 'Heads 1 / 2 / 3 placed left / centre / right. 0% = mono, like the hardware.';
+  x.on = el('button', { class: 'ms', type: 'button', title: 'Bypass: nothing new goes onto the tape, the echoes and the spring ring out. Settings kept.' }, 'On'); x.on.onclick = () => set('on', !c.on, true);
+  x.dry = el('button', { class: 'ms', type: 'button', title: 'Dry: the sound itself goes through. Off = echoes and spring only (for a bus used as a send).' }, 'Dry'); x.dry.onclick = () => set('dry', !c.dry, true);
+  x.pc = el('button', { class: 'ms', type: 'button', title: 'Pre: the dry goes through the RE-201’s preamp too (driven by Input). The colour people kept these for.' }, 'Pre'); x.pc.onclick = () => set('pc', !c.pc, true);
+  x.e2s = el('button', { class: 'ms', type: 'button', title: 'Echo → Spring: the echoes go into the spring as well (on the hardware only the input does)' }, 'E→Spr'); x.e2s.onclick = () => set('e2s', !c.e2s, true);
+  x.state = el('div', { class: 'state x' }, '');
+  const body = el('div', { class: 'nb' }, x.view, x.modes, x.kind,
+    x.f.rate, el('div', { class: 'optrow x' }, x.sync), x.f.fb, x.f.ev, x.f.sv, x.f.bass, x.f.treb, x.f.inp,
+    el('div', { class: 'msec x' }, el('span', { class: 'lbl' }, 'Tape'), el('span'), el('span'), el('span')), x.f.wow, x.f.flt, x.f.age, x.f.hiss,
+    el('div', { class: 'msec x' }, el('span', { class: 'lbl' }, 'Out'), x.meter, el('span'), el('span')), x.f.spr,
+    el('div', { class: 'msrow' }, x.on, x.dry, x.pc, x.e2s), x.state);
+  x.root = shell(id, nameOf(id), 'ADK-201', body,
+    [port(id, 'in', 'aud', 'In: machines, effect returns, Ducks, buses or other inserts. Each machine gets its own tape.'), port(id, 'out', 'aud', 'Out: to Output, a bus or another insert')]);
+  x.tOff = 0;
+  adeUi(id);
+  return x.root;
+}
+function adeUi(id) {
+  const x = S[id], c = st.ade[id]; if (!x || !c) return;
+  for (const b of x.modes.children) att(b, 'aria-pressed', b._v === c.mode);
+  for (const b of x.sync.children) att(b, 'aria-pressed', b._v === c.sync);
+  att(x.on, 'aria-pressed', c.on); txt(x.on, c.on ? 'On' : 'Off');
+  att(x.dry, 'aria-pressed', c.dry); att(x.pc, 'aria-pressed', c.pc); att(x.e2s, 'aria-pressed', c.e2s);
+  const auto = AU.act.has('ad:' + id);
+  for (const k of ['rate', 'fb', 'ev', 'sv', 'bass', 'treb', 'inp', 'wow', 'flt', 'age', 'hiss', 'spr']) if (!auto || !['rate', 'fb', 'ev', 'sv'].includes(k)) x.f[k]._set(c[k]);
+  tog(x.f.rate, 'off', !!c.sync);
+  const mk = ADE_MODES[c.mode];
+  tog(x.f.sv, 'off', !mk[3]); tog(x.f.ev, 'off', !(mk[0] || mk[1] || mk[2])); tog(x.f.fb, 'off', !(mk[0] || mk[1] || mk[2]));
+  const d1 = adeD1(c, auV('ad:' + id + ':rate', c.rate));
+  txt(x.kind, adeModeTxt(c.mode) + (c.sync ? ' · on the Clock' : ''));
+  const hs = [0, 1, 2].filter(i => mk[i]);
+  txt(x.ms, hs.length ? hs.map(i => Math.round(d1 * ADE_HR[i] * 1000)).join(' · ') + ' ms' : 'spring only');
+  const fb = auV('ad:' + id + ':fb', c.fb), hot = hs.length && fb * 1.25 / (1 + 0.45 * (hs.length - 1)) >= 0.97;
+  txt(x.fbT, hs.length ? 'INTENSITY ' + Math.round(fb * 100) + '%' + (hot ? ' · RUNAWAY' : '') : '');
+  att(x.fbT, 'class', 'fbt' + (hot ? ' hot' : ''));
+  for (let i = 0; i < 3; i++) att(x.hd[i + 1], 'class', 'hd' + (mk[i] ? ' on' : ''));
+  att(x.spb, 'class', 'spb' + (mk[3] ? ' on' : ''));
+  tog(x.root, 'byp', !c.on);
+}
+// ~30 times a second while on screen: each head's level, the input on the record head, the spring, the tape moving
+function adeFrame(id, x, now, dt) {
+  const s = ADE[id]; if (!s) return;
+  s.visT = now; if (!s.vis) adeVis(id, true);
+  if (now - (x._lt || 0) < 25) return; x._lt = now;
+  const v = adeRead(id), c = st.ade[id]; if (!c) return;
+  const bar = (r, a) => { const h = Math.round(Math.min(1, Math.sqrt(a)) * 36); if (r._h === h) return; r._h = h; att(r, 'y', 48 - h); att(r, 'height', h); };
+  if (!v || !v.run) { for (const r of x.lv) bar(r, 0); x.spl.style.opacity = '0'; att(x.tape, 'class', 'tape'); return; }
+  bar(x.lv[0], v.i); for (let i = 0; i < 3; i++) bar(x.lv[i + 1], v.h[i]);
+  const so = Math.min(1, Math.sqrt(v.s) * 1.4).toFixed(2); if (x._so !== so) { x._so = so; x.spl.style.opacity = so; }
+  // the tape moves at the motor's speed: a faster Rate, faster dashes
+  x.tOff = (x.tOff - Math.min(100, dt || 33) * 0.0045 / Math.max(0.02, v.d || 0.1)) % 8;
+  att(x.tape, 'class', 'tape run'); att(x.tape, 'stroke-dashoffset', x.tOff.toFixed(1));
+}
+function adeChanged(id, slow) { sendAde(id); adeUi(id); save(); if (slow) render(); }
 // The Master node: loudness first (where the mix sits against the target), then the chain in the order the sound goes through it.
 const luNum = v => (isFinite(v) && v > -70 ? (v < 0 ? '−' : '') + Math.abs(v).toFixed(1) : '−∞');
 const dbS = v => (v < 0 ? '−' : '+') + Math.abs(v).toFixed(1);
@@ -4595,7 +4974,7 @@ function matchTarget() {
 }
 function buildNode(id) {
   const ty = typeOf(id);
-  const root = ty === 'machine' ? buildMachine(D[id]) : ty === 'clock' ? buildClock() : ty === 'out' ? buildOut() : ty === 'rec' ? buildRec() : ty === 'duck' ? buildDuck(id) : ty === 'fx' ? buildFx(id) : ty === 'mst' ? buildMaster() : ty === 'eq' ? buildEq(id) : ty === 'sat' ? buildSat(id) : ty === 'mod' ? buildMod(id) : ty === 'nt' ? buildNt(id) : buildBus(id);
+  const root = ty === 'machine' ? buildMachine(D[id]) : ty === 'clock' ? buildClock() : ty === 'out' ? buildOut() : ty === 'rec' ? buildRec() : ty === 'duck' ? buildDuck(id) : ty === 'fx' ? buildFx(id) : ty === 'mst' ? buildMaster() : ty === 'eq' ? buildEq(id) : ty === 'sat' ? buildSat(id) : ty === 'ade' ? buildAde(id) : ty === 'mod' ? buildMod(id) : ty === 'nt' ? buildNt(id) : buildBus(id);
   NODES[id] = { el: root, w: NODE_W[ty], h: 0 };
   WORLD.append(root);
   placeNode(id);
@@ -4730,6 +5109,7 @@ function applyGraph() {
   if (!H.ctx) return;
   for (const id in EQ) if (st.nodes[id]) reroute(EQ[id], destNode(id));
   for (const id in SAT) if (st.nodes[id]) reroute(SAT[id], destNode(id));
+  for (const id in ADE) if (st.nodes[id]) reroute(ADE[id], destNode(id));
   for (const id in B) if (st.nodes[id]) reroute(B[id], destNode(id));
   for (const id in DK) if (st.nodes[id]) reroute(DK[id], destNode(id));
   for (const id in FX) if (st.nodes[id]) reroute(FX[id], destNode(id));
@@ -4753,6 +5133,7 @@ function addNode(kind, wx, wy, bare) {
   if (kind === 'duck') { id = ''; for (let i = 1; i <= MAX_DUCK; i++) if (!st.nodes['duck' + i]) { id = 'duck' + i; break; } if (!id) { toast('Four Ducks is the limit.'); return; } }
   if (kind === 'eq') { id = ''; for (let i = 1; i <= MAX_EQ; i++) if (!st.nodes['eq' + i]) { id = 'eq' + i; break; } if (!id) { toast('Four EQs is the limit.'); return; } }
   if (kind === 'sat') { id = ''; for (let i = 1; i <= MAX_SAT; i++) if (!st.nodes['sat' + i]) { id = 'sat' + i; break; } if (!id) { toast('Four Saturators is the limit.'); return; } }
+  if (kind === 'ade') { id = ''; for (let i = 1; i <= MAX_ADE; i++) if (!st.nodes['ade' + i]) { id = 'ade' + i; break; } if (!id) { toast('Two Adinkrahenes is the limit.'); return; } }
   if (kind === 'audio') { id = ''; for (let i = 1; i <= 4; i++) if (!st.nodes['audio' + i]) { id = 'audio' + i; break; } if (!id) { toast('Four audio tracks is the limit.'); return; } }
   if (st.nodes[id]) { flyTo(id); return; }
   const ty = typeOf(id); if (!ty) return;
@@ -4763,7 +5144,7 @@ function addNode(kind, wx, wy, bare) {
     if (r.x >= o.x && r.x < wx + NODE_W.mst + 60) { r.x = wx + NODE_W.mst + 70; placeNode('rec'); }
     [wx, wy] = freeSpot(NODE_W.mst, 660, wx, wy);
   }
-  if (wx == null) { const c = toWorld(CVW / 2, CVH / 2); [wx, wy] = freeSpot(NODE_W[ty], ty === 'duck' ? 330 : ty === 'fx' ? 420 : ty === 'mst' ? 660 : ty === 'eq' ? 480 : ty === 'sat' ? 600 : ty === 'mod' ? 320 : ty === 'nt' ? 220 : 240, c[0] - NODE_W[ty] / 2, c[1] - 80); }
+  if (wx == null) { const c = toWorld(CVW / 2, CVH / 2); [wx, wy] = freeSpot(NODE_W[ty], ty === 'duck' ? 330 : ty === 'fx' ? 420 : ty === 'mst' ? 660 : ty === 'eq' ? 480 : ty === 'sat' ? 600 : ty === 'ade' ? 700 : ty === 'mod' ? 320 : ty === 'nt' ? 220 : 240, c[0] - NODE_W[ty] / 2, c[1] - 80); }
   st.nodes[id] = { x: Math.round(wx), y: Math.round(wy) };
   if (ty === 'nt') {
     st.nt[id] = ntDefaults(mt || 'tr');
@@ -4808,6 +5189,10 @@ function addNode(kind, wx, wy, bare) {
     st.sat[id] = satDefaults();
     if (!bare) { st.wires.push({ a: id, b: 'out' }); toast(nameOf(id) + ' added. Drag machines (one, several or all) into its In, then turn up Drive. Each machine gets its own copy, so the stems carry it.'); }
     if (H.ctx) makeSat(id);
+  } else if (ty === 'ade') {
+    st.ade[id] = adeDefaults();
+    if (!bare) { st.wires.push({ a: id, b: 'out' }); toast(nameOf(id) + ' added. Drag a machine (or a bus) into its In and turn the Mode dial. Each machine gets its own tape, so the stems carry their echoes.'); }
+    if (H.ctx) makeAde(id);
   } else if (ty === 'mst') {
     // an insert on the Output: Output → Master → Rec
     const toRec = hasWire('out', 'rec') || !st.wires.some(w => w.b === 'rec');
@@ -4864,11 +5249,11 @@ function unDuck(id) {
 // One step from a node's menu: put an EQ (or a Saturator) between it and where its sound was going.
 const insertEq = src => insertIns(src, 'eq');
 function insertIns(src, kind) {
-  const ts = typeOf(src); if (!['machine', 'fx', 'duck', 'bus', 'eq', 'sat'].includes(ts)) return;
-  const prev = audioWire(src), dest = prev ? prev.b : 'out', what = kind === 'sat' ? 'Saturator' : 'EQ';
+  const ts = typeOf(src); if (!['machine', 'fx', 'duck', 'bus', 'eq', 'sat', 'ade'].includes(ts)) return;
+  const prev = audioWire(src), dest = prev ? prev.b : 'out', what = kind === 'sat' ? 'Saturator' : kind === 'ade' ? 'Adinkrahene' : 'EQ';
   if (prev && prev.k === 'plug') { toast(nameOf(src) + ' plays through ' + nameOf(dest) + ': put the ' + what + ' after ' + nameOf(dest) + ' (right-click it).'); return; }
-  if (typeOf(dest) === 'duck') { toast(nameOf(src) + ' goes into ' + nameOf(dest) + ': put the ' + what + ' after the Duck (right-click the Duck → Insert ' + (kind === 'sat' ? 'a Saturator' : 'an EQ') + ').'); return; }
-  const H0 = kind === 'sat' ? 600 : 480;
+  if (typeOf(dest) === 'duck') { toast(nameOf(src) + ' goes into ' + nameOf(dest) + ': put the ' + what + ' after the Duck (right-click the Duck → Insert ' + (kind === 'sat' ? 'a Saturator' : kind === 'ade' ? 'an Adinkrahene' : 'an EQ') + ').'); return; }
+  const H0 = kind === 'sat' ? 600 : kind === 'ade' ? 700 : 480;
   const n = st.nodes[src], nw = NODE_W[ts], dn = st.nodes[dest], gap = dn ? dn.x - (n.x + nw) : 0;
   const at = freeSpot(NODE_W[kind], H0, ...(gap > NODE_W[kind] + 60 ? [n.x + nw + (gap - NODE_W[kind]) / 2, n.y] : [n.x + 30, n.y + ((NODES[src] && NODES[src].h) || 220) + 50]));
   const id = addNode(kind, at[0], at[1], true); if (!id) return;
@@ -4884,7 +5269,7 @@ function satAll(id) {
   const moved = [];
   for (const w of st.wires) {
     if (w.k || w.b !== 'out' || w.a === id) continue;
-    const t = typeOf(w.a); if (!['machine', 'duck', 'bus', 'eq', 'sat'].includes(t) || !canWire(w.a, id)) continue;
+    const t = typeOf(w.a); if (!['machine', 'duck', 'bus', 'eq', 'sat', 'ade'].includes(t) || !canWire(w.a, id)) continue;
     w.b = id; moved.push(nameOf(w.a));
   }
   if (!audioWire(id)) st.wires.push({ a: id, b: 'out' });
@@ -4931,6 +5316,12 @@ function removeNode(id) {
     delete st.sat[id];
     dropSat(id);
     toast(nameOf(id) + ' removed.' + (eIns.length ? ' What went into it goes straight to ' + [...new Set(to)].map(nameOf).join(' and ') + ', clean.' : ''));
+  }
+  if (ty === 'ade') {
+    const to = []; for (const a of eIns) { const b = eOut && canWire(a, eOut.b) ? eOut.b : 'out'; st.wires.push({ a, b }); to.push(b); }
+    delete st.ade[id];
+    dropAde(id);
+    toast(nameOf(id) + ' removed.' + (eIns.length ? ' What went into it goes straight to ' + [...new Set(to)].map(nameOf).join(' and ') + ', dry.' : ''));
   }
   if (ty === 'nt') { ntPanic(id); delete st.nt[id]; delete NTS[id]; toast(nameOf(id).replace(/ \d+$/, '') + ' removed.'); }
   if (ty === 'mod') { delete st.mod[id]; dropModEnv(id); toast(nameOf(id).replace(/ \d+$/, '') + ' removed. Its knobs are back where they were set.'); }
@@ -5173,6 +5564,13 @@ CV.addEventListener('contextmenu', e => {
       const n = Object.keys(st.nodes).filter(k => typeOf(k) === 'eq').length, w = audioWire(id);
       if (n < MAX_EQ) items.push({ label: 'Insert an EQ', meta: 'Between it and ' + nameOf(w ? w.b : 'out'), on: () => insertEq(id) });
       if (Object.keys(st.nodes).filter(k => typeOf(k) === 'sat').length < MAX_SAT) items.push({ label: 'Insert a Saturator', meta: 'Between it and ' + nameOf(w ? w.b : 'out'), on: () => insertIns(id, 'sat') });
+      if (Object.keys(st.nodes).filter(k => typeOf(k) === 'ade').length < MAX_ADE) items.push({ label: 'Insert an Adinkrahene', meta: 'RE-201 tape echo + spring · between it and ' + nameOf(w ? w.b : 'out'), on: () => insertIns(id, 'ade') });
+    }
+    if (ty === 'ade') {
+      const c = st.ade[id];
+      items.push({ label: c.on ? 'Bypass' : 'Switch on', meta: c.on ? 'Nothing new onto the tape · the echoes ring out' : 'Back in', on: () => { c.on = !c.on; adeChanged(id, true); } });
+      items.push({ label: 'Echo everything', meta: 'Every machine, Duck, bus and insert going to Output (each its own tape)', on: () => satAll(id) });
+      items.push({ label: 'Reset', meta: 'Mode 9, 42% Intensity, free rate', on: () => { st.ade[id] = adeDefaults(); adeChanged(id, true); } });
     }
     if (ty === 'sat') {
       const c = st.sat[id];
@@ -5228,6 +5626,7 @@ function showAdd(sx, sy, atPoint) {
   const ne = Object.keys(st.nodes).filter(k => typeOf(k) === 'eq').length;
   if (ne < MAX_EQ) items.push({ label: 'EQ', meta: '4 bands · sweepable · on anything', on: () => addNode('eq', at && at[0], at && at[1]) });
   if (Object.keys(st.nodes).filter(k => typeOf(k) === 'sat').length < MAX_SAT) items.push({ label: 'Saturator', meta: '8 curves · Color · on one machine or all', on: () => addNode('sat', at && at[0], at && at[1]) });
+  if (Object.keys(st.nodes).filter(k => typeOf(k) === 'ade').length < MAX_ADE) items.push({ label: 'Adinkrahene', meta: 'ADK-201 · RE-201 tape echo + spring · an insert', on: () => addNode('ade', at && at[0], at && at[1]) });
   if (!st.nodes.verb) items.push({ label: 'Reverb', meta: 'One shared room · machine reverbs move into it', on: () => addNode('verb', at && at[0], at && at[1]) });
   if (!st.nodes.dub) items.push({ label: 'Dub Delay', meta: 'Shared tape echo on the Clock', on: () => addNode('dub', at && at[0], at && at[1]) });
   if (!st.nodes.mst) items.push({ label: 'Master', meta: 'Glue · tape · LUFS · on the Output', on: () => addNode('mst', at && at[0], at && at[1]) });
@@ -7146,6 +7545,7 @@ function lanePick(anchor) {
   for (const id in st.nodes) if (typeOf(id) === 'duck') grp(nameOf(id), ['dk:' + id + ':depth']);
   for (const id in st.nodes) if (typeOf(id) === 'eq') grp(nameOf(id), [0, 1, 2, 3].flatMap(i => ['eq:' + id + ':f' + i, 'eq:' + id + ':g' + i]));
   for (const id in st.nodes) if (typeOf(id) === 'sat') grp(nameOf(id), ['sa:' + id + ':drv', 'sa:' + id + ':mix']);
+  for (const id in st.nodes) if (typeOf(id) === 'ade') grp(nameOf(id), ['rate', 'fb', 'ev', 'sv'].map(f => 'ad:' + id + ':' + f));
   if (st.nodes.mst) grp('Master', ['mst:out']);
   grp('Output', ['out:vol']);
   PICK.append(box, el('p', null, 'Machines’ own knobs come later. A lane plays while the song plays; Stop puts every knob back where you left it.'));
@@ -7329,6 +7729,7 @@ function wireLevel(id) {
   if (ty === 'fx') return FX[id] ? peakOf(FX[id].an) : 0;
   if (ty === 'eq') return EQ[id] ? peakOf(EQ[id].an) : 0;
   if (ty === 'sat') return SAT[id] ? peakOf(SAT[id].an) : 0;
+  if (ty === 'ade') return ADE[id] ? peakOf(ADE[id].an) : 0;
   if (ty === 'out' || ty === 'mst') return M.an ? peakOf(M.an) : 0;
   return 0;
 }
@@ -7390,6 +7791,18 @@ function renderSlow(now) {
     cls(x.led, 'led' + (lv[id] && lv[id].v > 0.05 ? ' on' : ''));
     satUi(id); drawSat(id);
     if (s && s.vis && performance.now() - s.visT > 600) satVis(id, false);   // scrolled off: the copies stop reporting
+  }
+  for (const id in st.nodes) {
+    if (typeOf(id) !== 'ade' || !S[id]) continue;
+    const x = S[id], c = st.ade[id], w = audioWire(id), ins = st.wires.filter(v => !v.k && v.b === id).map(v => nameOf(v.a)), s = ADE[id];
+    let t = !ins.length ? 'Nothing in yet' : ins.join(' · ');
+    if (ins.length) t += !w ? ' · not wired out' : !onAir(id) ? ' → ' + nameOf(w.b) + ' · not wired out' : ' → ' + nameOf(w.b);
+    if (s && s.copies.size) t += ' · ' + s.copies.size + (s.copies.size > 1 ? ' tapes' : ' tape');
+    if (!c.on) t = 'Bypassed · ' + t;
+    txt(x.state, t); tog(x.state, 'warn', !!ins.length && !onAir(id));
+    cls(x.led, 'led' + (lv[id] && lv[id].v > 0.05 ? ' on' : ''));
+    adeUi(id);
+    if (s && s.vis && performance.now() - s.visT > 600) adeVis(id, false);   // scrolled off: the copies stop reporting
   }
   for (const id in st.nodes) {
     if (typeOf(id) !== 'duck' || !S[id]) continue;
@@ -8042,6 +8455,7 @@ function visFrame(t, dt) {
       if (ty === 'mst') { mstFrame(x, dt); continue; }   // its loudness stays readable when zoomed out
       if (ty === 'eq') { if (!WORLD._far) { meter(id, x, dt, EQ[id] && EQ[id].an); eqFrame(id, x, t); } continue; }
       if (ty === 'sat') { if (!WORLD._far) { meter(id, x, dt, SAT[id] && SAT[id].an); satFrame(id, x, performance.now()); } continue; }
+      if (ty === 'ade') { if (!WORLD._far) { meter(id, x, dt, ADE[id] && ADE[id].an); adeFrame(id, x, performance.now(), dt); } continue; }
       if (ty === 'mod') { if (!WORLD._far) modFrame(id, x, t); continue; }
       if (ty === 'nt') { if (!WORLD._far) ntFrame(id, x); continue; }
       if (!x.meter) continue;
