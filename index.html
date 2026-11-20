@@ -715,6 +715,8 @@ const DEVS = [
   { id: 'hwemudua', name: 'Hwemudua', code: 'HWD—01', kind: 'bass voice · sequencer · dice', src: 'dev/hwemudua.html', nout: true, nin: true, mono: true },
   // two Syncussion voices (VCO, sweep, LFO, noise, filter) with a two-lane sequencer; its lanes go out as GM toms 45 / 50
   { id: 'mmeredane', name: 'Mmere Dane', code: 'MMD—02', kind: 'Syncussion percussion synth', src: 'dev/mmeredane.html', nout: true, nin: true },
+  // the child of a TR-606 and a TR-707: thirteen voices, each with a gene between the 606's analog circuits and the 707's 8-bit PCM
+  { id: 'abusuapa', name: 'Abusua Pa', code: 'ABP—67', kind: '606 × 707 drum machine', src: 'dev/abusuapa.html', nout: true, nin: true },
   // aud: an audio track. No sequencer and no Clock wire: a live input (mic, line, hardware) and audio files go onto its tape in
   // Song view as clips. Its page (dev/audio.html) is only a panel; the rack owns the input (see "audio tracks" below).
   { id: 'audio1', name: 'Audio 1', code: 'IN—1', kind: 'audio track', src: 'dev/audio.html#1', aud: true },
@@ -734,6 +736,7 @@ const NIH = {
   sesawosuban: 'notes play its voice (both pulses and the noise pitch), one at a time',
   matemasie: 'notes play its synth (poly, or mono / legato / unison as set on its Env page)',
   hwemudua: 'notes set its pitch, one at a time (legato); in Notes mode they also open its gate; while its sequencer plays (Seq) they transpose it. Fixed mode keeps its frequency',
+  abusuapa: 'GM drum notes hit its voices (36 kick, 38 snare, 41 / 45 / 48 toms, 37 rim, 56 cowbell, 39 clap, 54 tambourine, 42 / 46 hats, 49 crash, 51 ride)',
   mmeredane: 'below C4 (60) hit voice A, C4 and up hit voice B (or A / B / Both, set on its page); a voice with Key on follows the note (A from C3, B from C4)',
 };
 const MAX_BUS = 4, MAX_DUCK = 4, MAX_EQ = 4, MAX_SAT = 4, MAX_ADE = 2, MAX_MOD = 8, MAX_NT = 8;
@@ -746,7 +749,7 @@ const KEY_Y = 64;
 const PLUG_Y = 42;   // a machine's audio In (Sesa Wo Suban) sits between its clock in and its notes in
 const NOTE_Y = 64;   // a machine's note in / out sit level with its first body row, below its clock in and audio out    // except a Duck's Key input, pinned level with its first body row
 // machines most likely to carry a kick, in the order a new Duck looks for its key
-const DRUMS = ['dwennimmen', 'asaseyeduru', 'hextrig', 'hyewonhye', 'nkonsonkonson', 'funtunfunefu'];
+const DRUMS = ['dwennimmen', 'asaseyeduru', 'hextrig', 'hyewonhye', 'nkonsonkonson', 'funtunfunefu', 'abusuapa'];
 
 function typeOf(id) {
   if (id === 'clock' || id === 'out' || id === 'rec' || id === 'mst') return id;
@@ -5652,7 +5655,7 @@ function showAdd(sx, sy, atPoint) {
    database it shares with the standalone page). Standalone machines are never touched.
    Fresh = all of that cleared, then a reload: the default patch, and each machine opens the way it does the first
    time in the rack (blank patterns, factory sounds, nothing latched, frozen or listening). Buffer stays. */
-const SESS_LS = ['ant07.v1', 'ant06.v1', 'dwn09.rack.v1', 'akb03.rack.v1', 'hextrig.project.v1.rack', 'v101.rack', 'ans12.rack.v1', 'nky32.rack.v1', 'hwn-mx.rack.v1', 'mfr64.rack.v1', 'fwh60.rack.v1', 'ayd08.rack.v1', 'sws.rack.v1', 'mms01.rack.v1', 'hwd01.rack.v1'];
+const SESS_LS = ['ant07.v1', 'ant06.v1', 'dwn09.rack.v1', 'akb03.rack.v1', 'hextrig.project.v1.rack', 'v101.rack', 'ans12.rack.v1', 'nky32.rack.v1', 'hwn-mx.rack.v1', 'mfr64.rack.v1', 'fwh60.rack.v1', 'ayd08.rack.v1', 'sws.rack.v1', 'mms01.rack.v1', 'hwd01.rack.v1', 'mmd02.rack.v1', 'abp67.rack.v1'];
 const SESS_IDB = [
   { db: 'nkn-08-rack', stores: ['kv', 'smp'], whole: true },
   { db: 'mframadan', stores: ['reels'], pre: 'mfr64.rack.v1:' },
